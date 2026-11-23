@@ -41,18 +41,30 @@ export function checkPassword(raw: unknown): string {
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 export const newInviteCode = () => randomBytes(4).toString("hex");
 
-export async function needsInvite(q: Q): Promise<boolean> {
+async function hasUsers(q: Q): Promise<boolean> {
   const [{ n }] = await q.query<{ n: number }>("SELECT count(*)::int AS n FROM users");
   return n > 0;
 }
 
-// The first account becomes the admin and needs no invite code. Every later account needs the invite code.
+// SETUP_CODE (optional): when it is set, the first account (the admin) must give this code.
+// It keeps a new site safe: a stranger who finds the site first cannot become the admin.
+const setupCode = () => (process.env.SETUP_CODE ?? "").trim().toLowerCase();
+
+// What the sign-up form must ask for: an invite code (later accounts), or the setup code (the first account, if SETUP_CODE is set).
+export async function signupNeeds(q: Q): Promise<{ needsInvite: boolean; setup: boolean }> {
+  const first = !(await hasUsers(q));
+  return { needsInvite: !first || !!setupCode(), setup: first && !!setupCode() };
+}
+
+// The first account becomes the admin. Every later account needs the invite code.
 export async function register(q: Q, rawName: unknown, rawPw: unknown, rawCode: unknown): Promise<User> {
   const username = checkUsername(rawName);
   const pw = checkPassword(rawPw);
   const passHash = await hashPassword(pw);
   await q.query("LOCK TABLE users IN EXCLUSIVE MODE");
-  const first = !(await needsInvite(q));
+  const first = !(await hasUsers(q));
+  const given = typeof rawCode === "string" ? rawCode.trim().toLowerCase() : "";
+  if (first && setupCode() && given !== setupCode()) throw new GameError("That setup code is not correct.");
   if (!first) {
     const [s] = await q.query<{ invite_code: string }>("SELECT invite_code FROM settings WHERE id = 1");
     const code = typeof rawCode === "string" ? rawCode.trim().toLowerCase() : "";

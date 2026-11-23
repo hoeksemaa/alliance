@@ -29,7 +29,7 @@ The server sends each player only what that player is allowed to see:
 
 ## Accounts
 
-- The first account becomes the admin account. It needs no invite code.
+- The first account becomes the admin account. If the server has a `SETUP_CODE`, the first account must give that code. Without `SETUP_CODE`, it needs no code.
 - Each later account needs the invite code. The admin page shows the code.
 - A player signs in once on each device. Many devices are OK.
 - The admin page opens, starts and ends the game, sets the AP timing, and removes players from the lobby.
@@ -57,8 +57,9 @@ The tests use an in-memory database.
 1. Make a Postgres database on [Neon](https://neon.tech) (the free plan is enough).
 2. Import this repository into Vercel.
 3. In the Vercel project, set `DATABASE_URL` to the Neon connection string (the pooled one).
-4. Deploy. The app makes its tables on the first request.
-5. Open the site and make the first account. It becomes the admin account.
+4. Set `SETUP_CODE` to a secret word. Then a stranger who finds the new site first cannot become the admin.
+5. Deploy. The app makes its tables on the first request.
+6. Open the site and make the first account with the setup code. It becomes the admin account.
 
 The AP drops need no cron job. The server applies each due AP drop at the next request from any player.
 

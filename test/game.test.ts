@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { migrate, openPg, openPglite, type Db } from "../src/lib/db";
-import { createSession, login, register, userForToken, type User } from "../src/lib/auth";
+import { createSession, login, register, signupNeeds, userForToken, type User } from "../src/lib/auth";
 import { act, createGame, currentGame, endGame, freshGame, joinGame, setSchedule, startGame, tanksOf } from "../src/lib/game";
 import { buildView } from "../src/lib/view";
 
@@ -59,6 +59,18 @@ describe("accounts", () => {
     const maya = await d.tx((q) => register(q, "Maya", "password1", invite_code));
     expect(maya.role).toBe("player");
     await expect(d.tx((q) => register(q, "maya", "password1", invite_code))).rejects.toThrow(/taken/);
+  });
+  it("asks the first account for SETUP_CODE when it is set", async () => {
+    process.env.SETUP_CODE = "Lantern-42";
+    try {
+      expect(await signupNeeds(d)).toEqual({ needsInvite: true, setup: true });
+      await expect(d.tx((q) => register(q, "Stranger", "password1", ""))).rejects.toThrow(/setup code/);
+      const admin = await d.tx((q) => register(q, "Sam", "password1", " lantern-42 "));
+      expect(admin.role).toBe("admin");
+      expect(await signupNeeds(d)).toEqual({ needsInvite: true, setup: false });
+    } finally {
+      delete process.env.SETUP_CODE;
+    }
   });
   it("signs in with the right password only, and sessions find the user", async () => {
     await d.tx((q) => register(q, "Sam", "password1", ""));

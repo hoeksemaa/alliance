@@ -9,6 +9,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
   const [password, setPassword] = useState("");
   const [invite, setInvite] = useState("");
   const [needsInvite, setNeedsInvite] = useState<boolean | null>(null);
+  const [setup, setSetup] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -16,7 +17,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
     if (mode !== "register") return;
     fetch("/api/auth/register", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => setNeedsInvite(!!d.needsInvite))
+      .then((d) => { setNeedsInvite(!!d.needsInvite); setSetup(!!d.setup); })
       .catch(() => setNeedsInvite(true));
   }, [mode]);
 
@@ -39,7 +40,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
     }
   }
 
-  const first = mode === "register" && needsInvite === false;
+  const first = mode === "register" && (needsInvite === false || setup);
   return (
     <div className="scroll">
       <div className="card-page">
@@ -59,9 +60,9 @@ export default function AuthForm({ mode }: { mode: Mode }) {
           </label>
           {mode === "register" && needsInvite && (
             <label className="field">
-              <span>Invite code</span>
+              <span>{setup ? "Setup code" : "Invite code"}</span>
               <input className="input" name="invite" autoComplete="off" autoCapitalize="none" spellCheck={false} required
-                value={invite} onChange={(e) => setInvite(e.target.value)} placeholder="Get it from the admin" />
+                value={invite} onChange={(e) => setInvite(e.target.value)} placeholder={setup ? "The SETUP_CODE of this site" : "Get it from the admin"} />
             </label>
           )}
           {mode === "register" && <p className="note">Use 2 to 16 letters, digits or _ for the username. Use 8 or more characters for the password.</p>}
