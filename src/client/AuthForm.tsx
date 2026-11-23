@@ -58,7 +58,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
             <input className="input" name="password" type="password" required minLength={mode === "register" ? 8 : 1} maxLength={200}
               autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={(e) => setPassword(e.target.value)} />
           </label>
-          {mode === "register" && needsInvite && (
+          {mode === "register" && needsInvite !== false && (
             <label className="field">
               <span>{setup ? "Setup code" : "Invite code"}</span>
               <input className="input" name="invite" autoComplete="off" autoCapitalize="none" spellCheck={false} required
