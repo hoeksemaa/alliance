@@ -1,0 +1,10 @@
+# Files that `vercel deploy` must not upload.
+.env
+.env*.local
+.data
+.next
+node_modules
+public/flags
+.playwright-mcp
+.DS_Store
+*.tsbuildinfo
