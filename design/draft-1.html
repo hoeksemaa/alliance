@@ -1,0 +1,1354 @@
+<title>Alliance</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400..900&display=swap">
+<style>
+/* Alliance: a Tank Turn Tactics game, dressed like a card game table.
+   Layout: one phone screen. Top: a read-only HUD. Middle: the board. Bottom: everything you touch.
+   Look: a slow pixel-paint swirl fills the screen (with a faint CRT vignette). Every piece of UI is the same chunky panel:
+   rounded, a 2px edge, a bottom lip. Buttons are fat and springy. The Actions menu is a hand of cards with price tags.
+   The board itself (flags, grid, border) stays rigid and still; only the swirl under it and the range line move.
+   Colors are safe for red-green color blindness: the actions sit on the blue-yellow axis, no action is green,
+   and red is only for Cancel and Close (which also have stripes). AP is gold everywhere (the money); range is sky.
+   One font (Nunito). No text repeats what the screen already shows.
+   Light is the default; the page has its own Light/Dark setting and ignores the host theme on purpose. */
+:root {
+  --page: #efe3cc;
+  --panel: #fffaf0;
+  --panel-2: #f3e8d3;
+  --edge: #dfcca8;
+  --edge-lip: #c4ab80;
+  --line: #e7d8bb;
+  --ink: #2a2520;
+  --ink-2: #74695a;
+  --off: #efe3cb;
+  --off-lip: #c9b28b;
+  --on-btn: #ffffff;
+  --heart: #d6392f;
+  --heart-edge: #8e1d17;
+  --board-wash: rgba(255, 250, 240, .38);
+  --zone: rgba(255, 255, 255, .55);
+  --move: #1f6fc5;
+  --attack: #3d4250;
+  --give: #f2b705;
+  --give-on: #2a2205;
+  --give-ink: #9a7300;
+  --give-deep: #8a6600;
+  --extend: #45b8d8;
+  --extend-on: #0f2a33;
+  --extend-ink: #0b7d99;
+  --extend-deep: #0b7d99;
+  --vote: #b5468f;
+  --cancel: #d2402a;
+  --warn: #a65d00;
+  --tag-bg: #2a2520;
+  --tag-fg: #f6cd3c;
+  --scrim: rgba(40, 28, 16, .42);
+  --tour-scrim: rgba(24, 18, 12, .66);
+  --flag-ring: rgba(255, 255, 255, .95);
+  --flag-shadow: rgba(60, 45, 30, .25);
+  --vignette: rgba(110, 70, 30, .32);
+  --sw-a: #f4e1bd;
+  --sw-b: #ec9a6c;
+  --sw-c: #5db3ad;
+  --sw-d: #f1bf45;
+  --f: "Nunito", ui-rounded, system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+:root[data-mode="dark"] {
+  --page: #121a1c;
+  --panel: #2b373b;
+  --panel-2: #1f282b;
+  --edge: #43555b;
+  --edge-lip: #0f1618;
+  --line: #3a4a50;
+  --ink: #f3efe6;
+  --ink-2: #a2aeac;
+  --off: #3b4b51;
+  --off-lip: #141c1f;
+  --heart: #f0645a;
+  --heart-edge: #9e2a22;
+  --board-wash: rgba(22, 31, 34, .45);
+  --zone: rgba(255, 255, 255, .09);
+  --attack: #687084;
+  --give-ink: #f2c84b;
+  --extend-ink: #6fd0ea;
+  --cancel: #e0493d;
+  --warn: #f0a24a;
+  --tag-bg: #121a1c;
+  --scrim: rgba(0, 0, 0, .58);
+  --tour-scrim: rgba(0, 0, 0, .74);
+  --flag-ring: rgba(255, 255, 255, .82);
+  --flag-shadow: rgba(0, 0, 0, .5);
+  --vignette: rgba(0, 0, 0, .5);
+  --sw-a: #1a2b33;
+  --sw-b: #4d2f58;
+  --sw-c: #17565b;
+  --sw-d: #5e4920;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { height: 100%; box-sizing: border-box; }
+body {
+  height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none;
+  background: var(--page); color: var(--ink);
+  font: 600 15px/1.45 var(--f);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--move); outline-offset: 2px; }
+
+/* ---------- the table: a pixel-paint swirl behind everything, plus a faint CRT vignette ---------- */
+#bg { position: fixed; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+.crt {
+  position: fixed; inset: 0; pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, .035) 0 1px, transparent 1px 3px),
+    radial-gradient(120% 95% at 50% 45%, transparent 48%, var(--vignette) 100%);
+}
+
+.app {
+  --pb: max(10px, env(safe-area-inset-bottom, 0px));
+  position: relative; z-index: 1; height: 100%; max-width: 640px; margin: 0 auto;
+  display: flex; flex-direction: column; gap: 10px;
+  padding-top: max(10px, env(safe-area-inset-top, 0px)); padding-bottom: var(--pb);
+}
+/* the HUD, the tab bar and the action panel take the board's exact left edge and width (JS measures the board and sets --gx and --gw) */
+.hud, .footer, .tray { width: var(--gw, 100%); margin-left: var(--gx, 0px); }
+
+/* one panel style for every surface */
+.panel {
+  background: var(--panel); border: 2px solid var(--edge); border-radius: 16px;
+  box-shadow: 0 4px 0 var(--edge-lip), 0 14px 26px -10px rgba(0, 0, 0, .32);
+}
+.label { font: 900 11px var(--f); letter-spacing: .07em; text-transform: uppercase; color: var(--ink-2); }
+
+/* flags: a soft white sticker edge everywhere */
+.flag-img { border-radius: 2px; box-shadow: 0 0 0 1.5px var(--flag-ring), 0 1px 3px 1px var(--flag-shadow); object-fit: cover; object-position: center; display: block; }
+/* a flag shown as a little card (HUD, panel heads) */
+.flag-card { border-radius: 4px; box-shadow: 0 0 0 2px #fff, 0 2px 0 2px var(--edge-lip); }
+
+/* ---------- HUD (read-only) ---------- */
+/* One text size (--hs) for every label and number. Numbers sit in chips: AP in gold, range in sky. The height is fixed, so the board size never depends on the HUD. */
+.hud { flex: none; position: relative; z-index: 2; height: 52px; container-type: inline-size; }
+/* no trays behind the HUD, the board labels or the tab bar: text on the swirl gets a soft halo instead */
+.hud-in, .cols, .rows { text-shadow: 0 0 3px var(--panel), 0 0 7px color-mix(in srgb, var(--panel) 75%, transparent); }
+.num { text-shadow: none; }
+.hud-in { --hs: clamp(11px, 4.4cqi, 19px); height: 100%; display: flex; align-items: center; gap: clamp(6px, 3cqi, 16px); line-height: 1.15; }
+.me { display: flex; align-items: center; gap: clamp(6px, 2.4cqi, 11px); }
+.me .flag-img { width: calc(var(--hs) * 1.9); height: calc(var(--hs) * 1.9); rotate: -4deg; }
+.hearts { display: flex; gap: clamp(1px, .6cqi, 3px); }
+.hearts svg { width: calc(var(--hs) * 1.12); height: calc(var(--hs) * 1.02); display: block; overflow: visible; }
+.hearts .dead { font: 900 var(--hs) var(--f); color: var(--ink-2); }
+.stat { position: relative; display: flex; align-items: center; gap: .3em; white-space: nowrap; }
+.stat span, .timer span { font: 800 var(--hs) var(--f); color: var(--ink-2); }
+.num {
+  display: inline-grid; place-items: center; min-width: 1.8em; height: 1.6em; padding: 0 .32em; border-radius: .42em;
+  font: 900 var(--hs)/1 var(--f); font-variant-numeric: tabular-nums;
+  background: var(--chip); color: var(--chip-on);
+  box-shadow: inset 0 .1em 0 rgba(255, 255, 255, .35), 0 .16em 0 var(--chip-lip);
+}
+.n-ap { --chip: var(--give); --chip-on: var(--give-on); --chip-lip: #a77e00; }
+.n-rng { --chip: var(--extend); --chip-on: var(--extend-on); --chip-lip: #23869f; }
+.timer { margin-left: auto; display: grid; justify-items: end; white-space: nowrap; }
+.timer b { font: 900 var(--hs) var(--f); font-variant-numeric: tabular-nums; }
+.pop { animation: pop .45s cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes pop { 0% { transform: scale(1); } 35% { transform: scale(1.45) rotate(-6deg); } 100% { transform: scale(1); } }
+/* "−1" drops off the AP chip when you spend AP */
+.hud-float {
+  position: absolute; right: -.1em; top: 70%; z-index: 3; pointer-events: none;
+  font: 900 var(--hs)/1 var(--f); font-style: normal; color: #fff;
+  text-shadow: 1.5px 0 0 var(--give-deep), -1.5px 0 0 var(--give-deep), 0 1.5px 0 var(--give-deep), 0 -1.5px 0 var(--give-deep), 0 3px 0 rgba(0, 0, 0, .25);
+  animation: drop .85s ease-out forwards;
+}
+@keyframes drop { from { opacity: 0; transform: translateY(-6px) scale(.6); } 20% { opacity: 1; transform: translateY(2px) scale(1.2); } to { opacity: 0; transform: translateY(20px) scale(1); } }
+
+/* ---------- board ---------- */
+/* The board is as large as the space allows, but it always keeps 132px free below it, so the action panel never covers the board.
+   With spare room, the board is centered. */
+.stage { flex: 1 1 auto; min-height: 0; container-type: size; }
+.chart {
+  width: min(100%, 50vh);
+  width: min(100cqw, 100cqh - 132px);
+  margin-inline: auto;
+  margin-top: max(0px, min((100cqh - min(100cqw, 100cqh - 132px)) / 2, 100cqh - min(100cqw, 100cqh - 132px) - 132px));
+  --lab: 13px;
+  display: grid; grid-template-columns: var(--lab) minmax(0, 1fr); grid-template-rows: var(--lab) auto;
+}
+.cols, .rows { font: 900 8.5px/1 var(--f); color: var(--ink); font-variant-numeric: tabular-nums; }
+.cols { grid-column: 2; display: grid; grid-template-columns: repeat(20, 1fr); align-items: end; padding-bottom: 3px; }
+.cols span { text-align: center; }
+.rows { grid-column: 1; grid-row: 2; display: grid; grid-template-rows: repeat(20, 1fr); justify-items: end; align-items: center; padding-right: 3px; }
+@media (min-width: 700px) { .chart { --lab: 18px; } .cols, .rows { font-size: 10px; } }
+
+.board {
+  grid-column: 2; grid-row: 2; position: relative; aspect-ratio: 1; max-width: 100%;
+  border: 2px solid color-mix(in srgb, var(--ink) 82%, var(--panel)); border-radius: 3px;
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--ink) 30%, transparent);
+  background: var(--board-wash); overflow: hidden; container-type: inline-size;
+  touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer;
+}
+.board > * { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.gridlines {
+  --g: color-mix(in srgb, var(--ink) 13%, transparent);
+  --G: color-mix(in srgb, var(--ink) 26%, transparent);
+  background-image:
+    linear-gradient(to right, var(--G) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--G) 1px, transparent 1px),
+    linear-gradient(to right, var(--g) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--g) 1px, transparent 1px);
+  background-size: 25% 25%, 25% 25%, 5% 5%, 5% 5%;
+}
+svg.zone, svg.lines { overflow: visible; }
+.zone path { fill: var(--zone); }
+.lines path { fill: none; stroke-width: 1.8; stroke-dasharray: 6 4; stroke-linecap: round; }
+.lines .now { stroke: var(--ink); }
+.lines .now.faint { opacity: .3; }
+.lines .preview { stroke-width: 2.2; }
+/* each line has its own pattern: range = medium dashes, move preview = dots, extend preview = long dashes */
+.lines .preview.move { stroke: var(--move); stroke-width: 2.8; stroke-dasharray: .1 5.5; }
+.lines .preview.extend { stroke: var(--extend-ink); stroke-dasharray: 13 5; }
+
+.pieces > * { position: absolute; width: 5%; height: 5%; }
+.piece .flag-img { width: 100%; height: 100%; }
+.piece.you { z-index: 2; }
+.piece.ghost { opacity: .5; z-index: 2; }
+.piece.ghost .flag-img { box-shadow: 0 0 0 2px var(--move); }
+.piece.picked { z-index: 3; }
+.piece.picked::before {
+  content: ""; position: absolute; inset: -5px; --c: var(--ink);
+  background:
+    linear-gradient(var(--c), var(--c)) top left / 40% 2.5px no-repeat,
+    linear-gradient(var(--c), var(--c)) top left / 2.5px 40% no-repeat,
+    linear-gradient(var(--c), var(--c)) top right / 40% 2.5px no-repeat,
+    linear-gradient(var(--c), var(--c)) top right / 2.5px 40% no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom left / 40% 2.5px no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom left / 2.5px 40% no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom right / 40% 2.5px no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom right / 2.5px 40% no-repeat;
+}
+.piece.picked.far::before { --c: var(--ink-2); opacity: .7; }
+.piece.picked.vote::before { --c: var(--vote); }
+/* player names: permanent plain labels under each flag (above it on the bottom row; edge-aligned in the first and last columns) */
+.nm {
+  position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 1px;
+  font: 800 clamp(7.5px, 2.6cqi, 12px)/1 var(--f); color: var(--ink); white-space: nowrap; pointer-events: none;
+  text-shadow: 0 0 2px var(--panel), 0 0 3px var(--panel), 0 0 1px var(--panel);
+}
+.nm.up { top: auto; bottom: 100%; margin: 0 0 1px; }
+.nm.l { left: 0; transform: none; }
+.nm.r { left: auto; right: 0; transform: none; }
+.cty { font-weight: 600; color: var(--ink-2); }
+/* shoot targets = solid dark ring, give targets = dashed gold ring (the pattern differs, not only the color) */
+.piece.cand.attack .flag-img { box-shadow: 0 0 0 1.5px var(--flag-ring), 0 0 0 4px var(--attack); }
+.piece.cand.give .flag-img { outline: 2.5px dashed var(--give-ink); outline-offset: 2px; }
+.votes {
+  position: absolute; right: -6px; top: -6px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 5px; z-index: 4;
+  background: var(--vote); color: #fff; font: 900 9.5px/15px var(--f); text-align: center; box-shadow: 0 0 0 1.5px #fff;
+}
+
+/* ---------- board effects ---------- */
+.fx > div { position: absolute; transform: translate(-50%, -50%); pointer-events: none; }
+/* score-style pop text: white with a thick colored outline */
+.fx-text {
+  font: 900 17px/1 var(--f); color: #fff; white-space: nowrap; letter-spacing: .02em; z-index: 6;
+  text-shadow:
+    2px 0 0 var(--c), -2px 0 0 var(--c), 0 2px 0 var(--c), 0 -2px 0 var(--c),
+    1.5px 1.5px 0 var(--c), -1.5px 1.5px 0 var(--c), 1.5px -1.5px 0 var(--c), -1.5px -1.5px 0 var(--c),
+    0 4px 0 rgba(0, 0, 0, .3);
+  animation: score 1.1s cubic-bezier(.2, .8, .3, 1) forwards;
+}
+.fx-text.big { font-size: 22px; }
+@keyframes score {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.3) rotate(-10deg); }
+  16% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(5deg); }
+  30% { transform: translate(-50%, -50%) scale(1) rotate(-2deg); }
+  70% { opacity: 1; transform: translate(-50%, -125%) scale(1) rotate(0); }
+  100% { opacity: 0; transform: translate(-50%, -190%) scale(.95); }
+}
+.fx-ring { width: 5%; aspect-ratio: 1; border: 3px solid var(--c); border-radius: 4px; animation: ring .55s ease-out forwards; }
+@keyframes ring { from { opacity: 1; transform: translate(-50%, -50%) scale(.8); } to { opacity: 0; transform: translate(-50%, -50%) scale(2.2); } }
+.fx-tag {
+  font: 800 12px/1.3 var(--f); background: var(--panel); color: var(--ink); border: 2px solid var(--edge);
+  padding: 4px 9px; border-radius: 8px; white-space: nowrap; box-shadow: 0 3px 0 var(--edge-lip);
+  animation: tag 1.6s ease forwards;
+}
+@keyframes tag { 0% { opacity: 0; transform: translate(-50%, -30%) scale(.8); } 10%, 80% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -50%); } }
+/* shoot and give AP: a straight tracer with a muzzle flash (same motion, different color); a burst on impact */
+.fx-tracer {
+  width: 7%; height: 1%; min-height: 3px; border-radius: 3px; z-index: 5;
+  background: linear-gradient(90deg, transparent, var(--c) 55%, color-mix(in srgb, var(--c) 35%, #fff) 100%);
+  box-shadow: 0 0 6px 1px var(--c);
+}
+.fx-muzzle {
+  width: 3.4%; aspect-ratio: 1; border-radius: 50%; z-index: 5;
+  background: radial-gradient(circle, #fff 0 24%, var(--c) 26% 58%, transparent 62%);
+  animation: muzzle .24s ease-out forwards;
+}
+@keyframes muzzle { from { transform: translate(-50%, -50%) scale(.5); opacity: 1; } to { transform: translate(-50%, -50%) scale(1.7); opacity: 0; } }
+.fx-burst { width: 5%; aspect-ratio: 1; border-radius: 50%; border: 3px solid var(--c); animation: burst .55s cubic-bezier(.2, .8, .3, 1) forwards; }
+.fx-burst.big { --s: 4; border-width: 4px; animation-duration: .75s; }
+@keyframes burst { from { transform: translate(-50%, -50%) scale(.4); opacity: 1; } to { transform: translate(-50%, -50%) scale(var(--s, 2.6)); opacity: 0; } }
+.fx-pulse { width: 5%; aspect-ratio: 1; border: 2.5px solid var(--c); border-radius: 4px; }
+/* a destroyed tank: its flag spins away and debris flies out */
+.fx-bit { width: 1.5%; aspect-ratio: 1; background: var(--c); border-radius: 1px; box-shadow: 0 0 0 1px rgba(0, 0, 0, .25); z-index: 5; }
+.fx-vanish { width: 5%; aspect-ratio: 1; z-index: 5; }
+.fx-vanish .flag-img { width: 100%; height: 100%; }
+
+/* ---------- tab bar (everything you touch) ---------- */
+/* six identical buttons that sit in a darker tray */
+.footer { flex: none; container-type: inline-size; padding-bottom: 4px; }
+.tabs { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
+.tab {
+  --c: var(--panel); --lip: var(--edge-lip);
+  position: relative; display: grid; justify-items: center; align-content: center; gap: 2px; height: 48px; padding: 0 2px;
+  border: 0; border-radius: 11px; background: var(--c); color: var(--ink);
+  box-shadow: inset 0 0 0 1.5px var(--edge), 0 4px 0 var(--lip);
+  cursor: pointer; font: 900 10.5px/1.1 var(--f); user-select: none; -webkit-user-select: none;
+  transition: transform .14s cubic-bezier(.34, 1.56, .64, 1), box-shadow .14s ease, filter .14s ease;
+}
+.tab .ico { font-size: 18px; line-height: 1.15; filter: drop-shadow(0 1.5px 0 rgba(0, 0, 0, .18)); }
+.tab .t { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+@media (hover: hover) { .tab:hover { transform: translateY(-2px) rotate(-1.5deg); box-shadow: inset 0 0 0 1.5px var(--edge), 0 6px 0 var(--lip); } .tab:nth-child(even):hover { transform: translateY(-2px) rotate(1.5deg); } }
+.tab:active, .tab[aria-expanded="true"] { transform: translateY(3px) rotate(0) !important; box-shadow: inset 0 0 0 1.5px var(--edge), 0 1px 0 var(--lip) !important; filter: brightness(.97); }
+.tab .badge {
+  position: absolute; top: -7px; right: -4px; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 6px; rotate: 6deg;
+  background: var(--ink); color: var(--panel); font: 900 11px/19px var(--f); text-align: center; box-shadow: 0 0 0 2px var(--panel);
+}
+
+/* ---------- action panel: springs up from the bottom over the tab bar ---------- */
+.tray {
+  position: absolute; left: 0; bottom: var(--pb); z-index: 10; container-type: inline-size;
+  display: grid; align-content: start; gap: 10px; padding: 12px 12px 14px;
+  box-shadow: 0 4px 0 var(--edge-lip), 0 -12px 30px -8px rgba(0, 0, 0, .32);
+  opacity: 0; visibility: hidden; transform: translateY(18px) scale(.97);
+  transition: transform .28s cubic-bezier(.2, 1.25, .3, 1), opacity .16s ease, visibility .28s;
+}
+.tray.open { opacity: 1; visibility: visible; transform: none; }
+.tray-head { display: flex; align-items: center; gap: 10px; min-height: 32px; min-width: 0; padding: 0 2px; }
+.tray-head > div { min-width: 0; }
+.tray-head > .flag-img { width: 32px; height: 32px; flex: none; rotate: -4deg; }
+.tray-head .title { font: 900 17px/1.2 var(--f); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tray-head .meta { font: 800 12.5px/1.3 var(--f); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tray-head .meta.bad { color: var(--warn); }
+.tray-head .meta.warn { color: var(--ink); }
+/* a small colored badge that names the open action */
+.lead {
+  --lip: color-mix(in srgb, var(--c) 60%, #000);
+  flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; rotate: -4deg;
+  background: var(--c); font-size: 17px; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .3), 0 3px 0 var(--lip);
+}
+.tray-actions { display: flex; gap: 10px; min-width: 0; }
+.tray-actions > * { flex: 1; min-width: 0; }
+.tray-actions > .dpad { flex: none; display: flex; gap: 6px; }
+.tray-nav { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }
+.deal { animation: deal .22s cubic-bezier(.2, .9, .3, 1.2); }
+@keyframes deal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* chunky buttons */
+.btn {
+  --c: var(--move);
+  --lip: color-mix(in srgb, var(--c) 60%, #000);
+  position: relative; overflow: hidden; border: 0; border-radius: 12px; cursor: pointer;
+  background-color: var(--c); color: var(--on-btn); min-height: 50px; padding: 0 14px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font: 900 16px/1.1 var(--f); letter-spacing: .01em;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, .2), 0 4px 0 var(--lip);
+  text-shadow: 0 2px 0 color-mix(in srgb, var(--lip) 85%, transparent);
+  transition: transform .14s cubic-bezier(.34, 1.56, .64, 1), box-shadow .14s ease, filter .14s ease;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none;
+}
+.btn .lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; }
+.btn .cost { font: 900 12.5px var(--f); font-variant-numeric: tabular-nums; white-space: nowrap; position: relative; padding: 2px 7px; border-radius: 7px; background: rgba(0, 0, 0, .18); text-shadow: none; }
+.btn .fill { position: absolute; inset: 0; background: rgba(255, 255, 255, .3); transform: scaleX(0); transform-origin: left; }
+.btn.holding .fill { transform: scaleX(1); transition: transform .52s linear; }
+@media (hover: hover) {
+  .btn:hover:not(:disabled) { transform: translateY(-2px) rotate(-1deg); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .2), 0 6px 0 var(--lip); filter: brightness(1.07); }
+  .btn.tilt-r:hover:not(:disabled) { transform: translateY(-2px) rotate(1deg); }
+}
+.btn:active:not(:disabled), .btn.holding { transform: translateY(3px) rotate(0) !important; box-shadow: inset 0 2px 0 rgba(255, 255, 255, .2), 0 1px 0 var(--lip) !important; }
+.btn:disabled { background: var(--off); color: var(--ink-2); box-shadow: 0 4px 0 var(--off-lip); text-shadow: none; cursor: not-allowed; }
+.btn:disabled .cost { background: rgba(0, 0, 0, .07); }
+.btn.press { animation: squish .32s cubic-bezier(.34, 1.56, .64, 1); }
+.btn.shake { animation: shake .3s ease; }
+.btn.small { min-height: 42px; font-size: 15px; border-radius: 10px; justify-content: center; padding: 0 14px; }
+.btn.nav { min-height: 44px; font-size: 16px; justify-content: center; }
+@keyframes squish { 0% { scale: 1; } 30% { scale: .93; } 65% { scale: 1.04; } 100% { scale: 1; } }
+@keyframes shake { 0%, 100% { translate: 0; } 25% { translate: -5px; } 75% { translate: 5px; } }
+.c-move { --c: var(--move); } .c-attack { --c: var(--attack); } .c-vote { --c: var(--vote); }
+/* the light buttons (give = gold, extend = sky) use dark text */
+.c-give { --c: var(--give); --on-btn: var(--give-on); text-shadow: none; }
+.c-extend { --c: var(--extend); --on-btn: var(--extend-on); text-shadow: none; }
+.c-give .fill, .c-extend .fill { background: rgba(0, 0, 0, .14); }
+.c-give .cost, .c-extend .cost { background: rgba(255, 255, 255, .42); }
+/* Cancel and Close: red, with warning stripes so they stand apart without color */
+.c-cancel { --c: var(--cancel); background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, .17) 0 7px, transparent 7px 14px); }
+.c-ink { --c: var(--ink); --on-btn: var(--panel); }
+.c-back { --c: var(--off); --lip: var(--off-lip); color: var(--ink); text-shadow: none; }
+
+/* the Actions menu: a hand of four cards, each with a price tag */
+.tray-actions.hand { gap: 8px; padding: 10px 2px 2px; }
+.btn.card {
+  flex: 1; flex-direction: column; justify-content: center; gap: 5px; min-height: 84px; padding: 10px 4px 8px;
+  overflow: visible; border-radius: 12px;
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .32), 0 4px 0 var(--lip);
+  transform: translateY(var(--y, 0px)) rotate(var(--r, 0deg));
+  animation: sway 3.6s ease-in-out calc(var(--i) * -.9s) infinite;
+}
+.btn.card:nth-child(1) { --r: -3deg; --y: 3px; }
+.btn.card:nth-child(2) { --r: -1deg; }
+.btn.card:nth-child(3) { --r: 1deg; }
+.btn.card:nth-child(4) { --r: 3deg; --y: 3px; }
+.hand.dealt .btn.card { animation: cardIn .4s cubic-bezier(.2, .9, .3, 1.3) calc(var(--i) * 55ms) backwards, sway 3.6s ease-in-out calc(var(--i) * -.9s) infinite; }
+@keyframes cardIn { from { translate: 0 46px; opacity: 0; } to { translate: 0 0; opacity: 1; } }
+@keyframes sway { 0%, 100% { rotate: -.8deg; } 50% { rotate: .8deg; } }
+@media (hover: hover) {
+  .btn.card:hover:not(:disabled), .btn.card.tilt-r:hover:not(:disabled) { transform: translateY(-7px) rotate(0deg) scale(1.05); box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .32), 0 9px 0 var(--lip); z-index: 2; }
+}
+.btn.card:active:not(:disabled) { transform: translateY(3px) rotate(0) !important; box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .32), 0 1px 0 var(--lip) !important; }
+.btn.card:disabled { box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .3), 0 4px 0 var(--off-lip); }
+.btn.card:disabled .ti { filter: grayscale(1); opacity: .55; }
+.card .ti { font-size: 26px; line-height: 1; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .22)); }
+.card .tl { font: 900 14px/1.1 var(--f); white-space: nowrap; }
+.card .tag {
+  position: absolute; top: -10px; left: 50%; translate: -50% 0;
+  padding: 2px 8px; border-radius: 7px; white-space: nowrap;
+  background: var(--tag-bg); color: var(--tag-fg); font: 900 11px/1.3 var(--f); text-shadow: none;
+  box-shadow: 0 0 0 2px var(--panel), 0 2px 0 2px var(--edge-lip);
+}
+/* aim buttons in the Move panel */
+.btn.arrow { --c: var(--off); --lip: var(--off-lip); color: var(--ink); text-shadow: none; width: 40px; padding: 0; justify-content: center; font: 900 19px/1 var(--f); }
+.btn.arrow.on { --c: var(--move); --lip: color-mix(in srgb, var(--move) 60%, #000); color: var(--on-btn); }
+/* a row of tank cards to pick (Shoot, Give AP, jury vote) */
+.pick-row { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; touch-action: pan-x; padding: 4px 4px 7px; margin: -4px -4px -7px; }
+.pick-row::-webkit-scrollbar { display: none; }
+.pick {
+  flex: none; width: 54px; height: 52px; border-radius: 10px; border: 2px solid var(--edge); background: var(--panel); cursor: pointer;
+  box-shadow: 0 3px 0 var(--edge-lip); rotate: -2deg;
+  display: grid; justify-items: center; align-content: center; gap: 5px; padding: 0; font: 900 10.5px/1 var(--f); color: var(--ink);
+  transition: transform .14s cubic-bezier(.34, 1.56, .64, 1), box-shadow .14s ease;
+}
+.pick:nth-child(even) { rotate: 2deg; }
+@media (hover: hover) { .pick:hover { transform: translateY(-3px) scale(1.06); box-shadow: 0 5px 0 var(--edge-lip); } }
+.pick:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--edge-lip); }
+.pick .flag-img { width: 24px; height: 24px; }
+.pick span { max-width: 48px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip { display: flex; align-items: center; gap: 8px; min-height: 50px; padding: 0 12px; border: 2px dashed var(--edge); border-radius: 12px; background: var(--panel-2); color: var(--ink-2); font: 800 13.5px/1.25 var(--f); }
+
+/* ---------- sheets ---------- */
+.scrim { position: fixed; inset: 0; background: var(--scrim); opacity: 0; visibility: hidden; transition: opacity .25s ease, visibility .25s; z-index: 20; }
+.sheet {
+  position: fixed; left: 50%; bottom: 0; z-index: 21; width: min(100%, 560px); max-height: 80%;
+  display: flex; flex-direction: column; border-bottom: 0; border-radius: 22px 22px 0 0;
+  box-shadow: 0 -14px 34px -8px rgba(0, 0, 0, .38);
+  transform: translate(-50%, 104%); visibility: hidden; transition: transform .34s cubic-bezier(.2, 1.1, .3, 1), visibility .34s;
+}
+.sheet-open .scrim { opacity: 1; visibility: visible; }
+.sheet-open .sheet { transform: translate(-50%, 0); visibility: visible; }
+.sheet-head { display: flex; justify-content: center; flex: none; padding: 18px 18px 8px; }
+/* a tilted title banner, used by sheets and the tour */
+.banner {
+  display: inline-flex; align-items: center; gap: 8px; margin: 0; rotate: -1.5deg;
+  padding: 6px 16px 7px; border-radius: 12px; background: var(--ink); color: var(--panel);
+  font: 900 20px/1.1 var(--f); letter-spacing: .01em;
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--ink) 55%, #000);
+}
+.sheet-body {
+  overflow-y: auto; display: grid; gap: 16px; align-content: start;
+  padding: 10px max(18px, env(safe-area-inset-right, 0px)) 14px max(18px, env(safe-area-inset-left, 0px));
+}
+.sheet-foot {
+  flex: none; border-top: 2px dashed var(--line);
+  padding: 12px max(18px, env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px));
+}
+.sheet-foot .btn { width: 100%; }
+.sheet h3 { margin: 0 0 8px; font: 900 12px/1.2 var(--f); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+.well { background: var(--panel-2); border-radius: 12px; padding: 2px 12px; box-shadow: inset 0 2px 0 rgba(0, 0, 0, .05); }
+.log { list-style: none; margin: 0; padding: 0; }
+.log li { display: grid; grid-template-columns: 8.2em minmax(0, 1fr); gap: 10px; align-items: start; padding: 9px 0; border-top: 2px dashed var(--line); font-size: 14.5px; line-height: 1.35; }
+.log li:first-child { border-top: 0; }
+.log time {
+  justify-self: start; white-space: nowrap; padding: 1px 7px; border-radius: 6px;
+  background: var(--panel); box-shadow: 0 2px 0 var(--edge); font: 800 11px/1.6 var(--f); color: var(--ink-2); font-variant-numeric: tabular-nums;
+}
+.log li.new span::after {
+  content: "NEW"; display: inline-block; margin-left: 8px; padding: 0 5px; border-radius: 5px; rotate: -4deg; vertical-align: 1px;
+  background: var(--ink); color: var(--panel); font: 900 9.5px/1.6 var(--f); letter-spacing: .06em;
+}
+.jurors { display: flex; flex-wrap: wrap; gap: 12px; padding-top: 2px; }
+.mini {
+  display: inline-grid; justify-items: center; gap: 6px; min-width: 62px; padding: 9px 8px 7px; rotate: -2deg;
+  background: var(--panel); border: 2px solid var(--edge); border-radius: 10px; box-shadow: 0 3px 0 var(--edge-lip);
+  font: 900 13px/1 var(--f);
+}
+.mini:nth-child(even) { rotate: 2deg; }
+.mini .flag-img { width: 28px; height: 28px; }
+.tally > div { display: flex; align-items: center; gap: 9px; padding: 8px 0; border-top: 2px dashed var(--line); font: 800 14.5px var(--f); }
+.tally > div:first-child { border-top: 0; }
+.tally .flag-img { width: 22px; height: 22px; }
+.tally .who { margin-right: auto; }
+.tally .gain { font: 900 11px/1.5 var(--f); font-style: normal; padding: 0 7px; border-radius: 6px; background: var(--give); color: var(--give-on); rotate: -3deg; }
+.tally .vc { font: 900 12px/1.6 var(--f); padding: 0 8px; border-radius: 7px; background: var(--vote); color: #fff; }
+.note { margin: 0; font-size: 14px; color: var(--ink-2); }
+.btn-row { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* ---------- tour ---------- */
+.tour { position: fixed; inset: 0; z-index: 40; }
+.tour .spot {
+  position: fixed; border-radius: 16px; pointer-events: none;
+  box-shadow: 0 0 0 3px #fff, 0 0 0 9999px var(--tour-scrim);
+  transition: left .32s cubic-bezier(.2, .9, .3, 1), top .32s cubic-bezier(.2, .9, .3, 1), width .32s cubic-bezier(.2, .9, .3, 1), height .32s cubic-bezier(.2, .9, .3, 1);
+}
+.tour-card {
+  position: fixed; width: min(340px, calc(100vw - 32px)); padding: 14px 16px 16px;
+  display: grid; gap: 10px; transition: left .32s cubic-bezier(.2, .9, .3, 1), top .32s cubic-bezier(.2, .9, .3, 1);
+}
+.tour-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.tour-card .banner { font-size: 17px; padding: 5px 12px 6px; }
+.tour-card p { margin: 0; font-size: 15px; }
+.tour-card .row { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.tour-card .row .grow { flex: 1; }
+.tour-dots { display: flex; gap: 4px; }
+.tour-dots i { width: 8px; height: 8px; border-radius: 3px; background: var(--line); }
+.tour-dots i.on { background: var(--ink); rotate: 45deg; }
+
+@media (min-width: 700px) {
+  .app { --pb: 16px; gap: 14px; padding-top: 16px; }
+}
+/* a narrow tab bar or action panel (when the board is small) */
+@container (max-width: 300px) {
+  .tab { font-size: 9px; }
+  .btn { padding: 0 10px; font-size: 15px; }
+  .btn .cost { display: none; }
+  .btn.arrow { width: 34px; }
+  .card .tl { font-size: 12px; }
+  .card .ti { font-size: 22px; }
+}
+@container (max-width: 270px) { .tab .t { display: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .btn, .tab, .tray, .pick { transition: none; }
+  .btn:hover:not(:disabled) { transform: none !important; }
+  .pop, .deal, .btn.press, .btn.shake, .btn.card, .hand.dealt .btn.card { animation: none !important; }
+  .fx, .hud-float { display: none; }
+  .sheet, .scrim, .tour .spot, .tour-card { transition: none; }
+}
+</style>
+
+<canvas id="bg" aria-hidden="true"></canvas>
+<div class="crt" aria-hidden="true"></div>
+
+<div class="app" id="app">
+  <header class="hud" id="hud" aria-label="Your tank"><div class="hud-in">
+    <div class="me" id="me"><img class="flag-img flag-card" id="me-flag" alt="Your flag: United States"><span class="hearts" id="hearts"></span></div>
+    <div class="stat" id="stat-ap"><span>AP:</span><b class="num n-ap" id="ap">3</b></div>
+    <div class="stat" id="stat-rng"><span>Range:</span><b class="num n-rng" id="rng">2</b></div>
+    <div class="timer" id="timer"><span id="timer-label">Next AP</span><b class="cd">--:--:--</b></div>
+  </div></header>
+
+  <div class="stage">
+    <div class="chart" id="chart">
+      <div class="cols" id="cols"></div>
+      <div class="rows" id="rows"></div>
+      <div class="board" id="board" aria-label="Board">
+        <div class="gridlines"></div>
+        <svg class="zone" id="zone" aria-hidden="true"></svg>
+        <div class="pieces" id="pieces"></div>
+        <svg class="lines" id="lines" aria-hidden="true"></svg>
+        <div class="fx" id="fx" aria-hidden="true"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <nav class="tabs" id="tabs" aria-label="Menu">
+      <button type="button" class="tab" data-tab="actions" aria-expanded="false"><span class="ico" aria-hidden="true">⚔️</span><span class="t">Actions</span></button>
+      <button type="button" class="tab" data-tab="news" aria-expanded="false"><span class="ico" aria-hidden="true">📰</span><span class="t">News</span><span class="badge" data-badge="news" hidden></span></button>
+      <button type="button" class="tab" data-tab="you" aria-expanded="false"><span class="ico" aria-hidden="true">📬</span><span class="t">You</span><span class="badge" data-badge="you" hidden></span></button>
+      <button type="button" class="tab" data-tab="jury" aria-expanded="false"><span class="ico" aria-hidden="true">⚖️</span><span class="t">Jury</span></button>
+      <button type="button" class="tab" data-tab="settings" aria-expanded="false"><span class="ico" aria-hidden="true">⚙️</span><span class="t">Settings</span></button>
+      <button type="button" class="tab" data-tour><span class="ico" aria-hidden="true">❓</span><span class="t">Tour</span></button>
+    </nav>
+  </footer>
+
+  <section class="tray panel" id="tray" aria-label="Actions" inert></section>
+</div>
+
+<div id="sheet-root">
+  <div class="scrim" id="scrim"></div>
+  <section class="sheet panel" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <div class="sheet-head"><h2 class="banner" id="sheet-title"></h2></div>
+    <div class="sheet-body" id="sheet-body"></div>
+    <div class="sheet-foot"><button type="button" class="btn nav c-cancel" data-close><span class="lbl">✕ Close</span></button></div>
+  </section>
+</div>
+
+<div class="tour" id="tour" hidden>
+  <div class="spot" id="spot"></div>
+  <div class="tour-card panel" id="tour-card" role="dialog" aria-modal="true" aria-live="polite"></div>
+</div>
+
+<script>
+(() => {
+  const FLAG_SRC = {"us": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGlkPSJmbGFnLWljb25zLXVzIiB2aWV3Qm94PSIwIDAgNjQwIDQ4MCI+CiAgPHBhdGggZmlsbD0iI2JkM2Q0NCIgZD0iTTAgMGg2NDB2NDgwSDAiLz4KICA8cGF0aCBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMzciIGQ9Ik0wIDU1LjNoNjQwTTAgMTI5aDY0ME0wIDIwM2g2NDBNMCAyNzdoNjQwTTAgMzUxaDY0ME0wIDQyNWg2NDAiLz4KICA8cGF0aCBmaWxsPSIjMTkyZjVkIiBkPSJNMCAwaDM2NC44djI1OC41SDAiLz4KICA8bWFya2VyIGlkPSJ1cy1hIiBtYXJrZXJIZWlnaHQ9IjMwIiBtYXJrZXJXaWR0aD0iMzAiPgogICAgPHBhdGggZmlsbD0iI2ZmZiIgZD0ibTE0IDAgOSAyN0wwIDEwaDI4TDUgMjd6Ii8+CiAgPC9tYXJrZXI+CiAgPHBhdGggZmlsbD0ibm9uZSIgbWFya2VyLW1pZD0idXJsKCN1cy1hKSIgZD0ibTAgMCAxNiAxMWg2MSA2MSA2MSA2MSA2MEw0NyAzN2g2MSA2MSA2MCA2MUwxNiA2M2g2MSA2MSA2MSA2MSA2MEw0NyA4OWg2MSA2MSA2MCA2MUwxNiAxMTVoNjEgNjEgNjEgNjEgNjBMNDcgMTQxaDYxIDYxIDYwIDYxTDE2IDE2Nmg2MSA2MSA2MSA2MSA2MEw0NyAxOTJoNjEgNjEgNjAgNjFMMTYgMjE4aDYxIDYxIDYxIDYxIDYweiIvPgo8L3N2Zz4K", "jp": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGlkPSJmbGFnLWljb25zLWpwIiB2aWV3Qm94PSIwIDAgNjQwIDQ4MCI+CiAgPGRlZnM+CiAgICA8Y2xpcFBhdGggaWQ9ImpwLWEiPgogICAgICA8cGF0aCBmaWxsLW9wYWNpdHk9Ii43IiBkPSJNLTg4IDMyaDY0MHY0ODBILTg4eiIvPgogICAgPC9jbGlwUGF0aD4KICA8L2RlZnM+CiAgPGcgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2Utd2lkdGg9IjFwdCIgY2xpcC1wYXRoPSJ1cmwoI2pwLWEpIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSg4OCAtMzIpIj4KICAgIDxwYXRoIGZpbGw9IiNmZmYiIGQ9Ik0tMTI4IDMyaDcyMHY0ODBoLTcyMHoiLz4KICAgIDxjaXJjbGUgY3g9IjUyMy4xIiBjeT0iMzQ0LjEiIHI9IjE5NC45IiBmaWxsPSIjYmMwMDJkIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMTY4LjQgOC42KXNjYWxlKC43NjU1NCkiLz4KICA8L2c+Cjwvc3ZnPgo=", "ng": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGlkPSJmbGFnLWljb25zLW5nIiB2aWV3Qm94PSIwIDAgNjQwIDQ4MCI+CiAgPGcgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2Utd2lkdGg9IjFwdCI+CiAgICA8cGF0aCBmaWxsPSIjZmZmIiBkPSJNMCAwaDY0MHY0ODBIMHoiLz4KICAgIDxwYXRoIGZpbGw9IiMwMDg3NTMiIGQ9Ik00MjYuNiAwSDY0MHY0ODBINDI2LjZ6TTAgMGgyMTMuM3Y0ODBIMHoiLz4KICA8L2c+Cjwvc3ZnPgo=", "ch": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGlkPSJmbGFnLWljb25zLWNoIiB2aWV3Qm94PSIwIDAgNjQwIDQ4MCI+CiAgPGcgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2Utd2lkdGg9IjFwdCI+CiAgICA8cGF0aCBmaWxsPSJyZWQiIGQ9Ik0wIDBoNjQwdjQ4MEgweiIvPgogICAgPGcgZmlsbD0iI2ZmZiI+CiAgICAgIDxwYXRoIGQ9Ik0xNzAgMTk1aDMwMHY5MEgxNzB6Ii8+CiAgICAgIDxwYXRoIGQ9Ik0yNzUgOTBoOTB2MzAwaC05MHoiLz4KICAgIDwvZz4KICA8L2c+Cjwvc3ZnPgo=", "fr": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGlkPSJmbGFnLWljb25zLWZyIiB2aWV3Qm94PSIwIDAgNjQwIDQ4MCI+CiAgPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTAgMGg2NDB2NDgwSDB6Ii8+CiAgPHBhdGggZmlsbD0iIzAwMDA5MSIgZD0iTTAgMGgyMTMuM3Y0ODBIMHoiLz4KICA8cGF0aCBmaWxsPSIjZTEwMDBmIiBkPSJNNDI2LjcgMEg2NDB2NDgwSDQyNi43eiIvPgo8L3N2Zz4K", "de": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGlkPSJmbGFnLWljb25zLWRlIiB2aWV3Qm94PSIwIDAgNjQwIDQ4MCI+CiAgPHBhdGggZmlsbD0iI2ZjMCIgZD0iTTAgMzIwaDY0MHYxNjBIMHoiLz4KICA8cGF0aCBmaWxsPSIjMDAwMDAxIiBkPSJNMCAwaDY0MHYxNjBIMHoiLz4KICA8cGF0aCBmaWxsPSJyZWQiIGQ9Ik0wIDE2MGg2NDB2MTYwSDB6Ii8+Cjwvc3ZnPgo=", "it": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGlkPSJmbGFnLWljb25zLWl0IiB2aWV3Qm94PSIwIDAgNjQwIDQ4MCI+CiAgPGcgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2Utd2lkdGg9IjFwdCI+CiAgICA8cGF0aCBmaWxsPSIjZmZmIiBkPSJNMCAwaDY0MHY0ODBIMHoiLz4KICAgIDxwYXRoIGZpbGw9IiMwMDkyNDYiIGQ9Ik0wIDBoMjEzLjN2NDgwSDB6Ii8+CiAgICA8cGF0aCBmaWxsPSIjY2UyYjM3IiBkPSJNNDI2LjcgMEg2NDB2NDgwSDQyNi43eiIvPgogIDwvZz4KPC9zdmc+Cg==", "se": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGlkPSJmbGFnLWljb25zLXNlIiB2aWV3Qm94PSIwIDAgNjQwIDQ4MCI+CiAgPHBhdGggZmlsbD0iIzAwNTI5MyIgZD0iTTAgMGg2NDB2NDgwSDB6Ii8+CiAgPHBhdGggZmlsbD0iI2ZlY2IwMCIgZD0iTTE3NiAwdjE5Mkgwdjk2aDE3NnYxOTJoOTZWMjg4aDM2OHYtOTZIMjcyVjB6Ii8+Cjwvc3ZnPgo=", "ua": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGlkPSJmbGFnLWljb25zLXVhIiB2aWV3Qm94PSIwIDAgNjQwIDQ4MCI+CiAgPGcgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2Utd2lkdGg9IjFwdCI+CiAgICA8cGF0aCBmaWxsPSJnb2xkIiBkPSJNMCAwaDY0MHY0ODBIMHoiLz4KICAgIDxwYXRoIGZpbGw9IiMwMDU3YjgiIGQ9Ik0wIDBoNjQwdjI0MEgweiIvPgogIDwvZz4KPC9zdmc+Cg==", "nl": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGlkPSJmbGFnLWljb25zLW5sIiB2aWV3Qm94PSIwIDAgNjQwIDQ4MCI+CiAgPHBhdGggZmlsbD0iI2FlMWMyOCIgZD0iTTAgMGg2NDB2MTYwSDB6Ii8+CiAgPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTAgMTYwaDY0MHYxNjBIMHoiLz4KICA8cGF0aCBmaWxsPSIjMjE0NjhiIiBkPSJNMCAzMjBoNjQwdjE2MEgweiIvPgo8L3N2Zz4K", "cl": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGlkPSJmbGFnLWljb25zLWNsIiB2aWV3Qm94PSIwIDAgNjQwIDQ4MCI+CiAgPGRlZnM+CiAgICA8Y2xpcFBhdGggaWQ9ImNsLWEiPgogICAgICA8cGF0aCBmaWxsLW9wYWNpdHk9Ii43IiBkPSJNMCAwaDY4Mi43djUxMkgweiIvPgogICAgPC9jbGlwUGF0aD4KICA8L2RlZnM+CiAgPGcgZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXBhdGg9InVybCgjY2wtYSkiIHRyYW5zZm9ybT0ic2NhbGUoLjkzNzUpIj4KICAgIDxwYXRoIGZpbGw9IiNmZmYiIGQ9Ik0yNTYgMGg1MTJ2MjU2SDI1NnoiLz4KICAgIDxwYXRoIGZpbGw9IiMwMDM5YTYiIGQ9Ik0wIDBoMjU2djI1NkgweiIvPgogICAgPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTE2Ny44IDE5MS43IDEyOC4yIDE2MmwtMzkuNSAzMCAxNC43LTQ4LjhMNjQgMTEzLjFsNDguNy0uNUwxMjcuOCA2NGwxNS41IDQ4LjUgNDguNy4xLTM5LjIgMzAuNHoiLz4KICAgIDxwYXRoIGZpbGw9IiNkNTJiMWUiIGQ9Ik0wIDI1Nmg3Njh2MjU2SDB6Ii8+CiAgPC9nPgo8L3N2Zz4K", "gr": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGlkPSJmbGFnLWljb25zLWdyIiB2aWV3Qm94PSIwIDAgNjQwIDQ4MCI+CiAgPHBhdGggZmlsbD0iIzBkNWVhZiIgZmlsbC1ydWxlPSJldmVub2RkIiBkPSJNMCAwaDY0MHY1My4zSDB6Ii8+CiAgPHBhdGggZmlsbD0iI2ZmZiIgZmlsbC1ydWxlPSJldmVub2RkIiBkPSJNMCA1My4zaDY0MHY1My40SDB6Ii8+CiAgPHBhdGggZmlsbD0iIzBkNWVhZiIgZmlsbC1ydWxlPSJldmVub2RkIiBkPSJNMCAxMDYuN2g2NDBWMTYwSDB6Ii8+CiAgPHBhdGggZmlsbD0iI2ZmZiIgZmlsbC1ydWxlPSJldmVub2RkIiBkPSJNMCAxNjBoNjQwdjUzLjNIMHoiLz4KICA8cGF0aCBmaWxsPSIjMGQ1ZWFmIiBkPSJNMCAwaDI2Ni43djI2Ni43SDB6Ii8+CiAgPHBhdGggZmlsbD0iIzBkNWVhZiIgZmlsbC1ydWxlPSJldmVub2RkIiBkPSJNMCAyMTMuM2g2NDB2NTMuNEgweiIvPgogIDxwYXRoIGZpbGw9IiNmZmYiIGZpbGwtcnVsZT0iZXZlbm9kZCIgZD0iTTAgMjY2LjdoNjQwVjMyMEgweiIvPgogIDxwYXRoIGZpbGw9IiMwZDVlYWYiIGZpbGwtcnVsZT0iZXZlbm9kZCIgZD0iTTAgMzIwaDY0MHY1My4zSDB6Ii8+CiAgPHBhdGggZmlsbD0iI2ZmZiIgZmlsbC1ydWxlPSJldmVub2RkIiBkPSJNMCAzNzMuM2g2NDB2NTMuNEgweiIvPgogIDxnIGZpbGw9IiNmZmYiIGZpbGwtcnVsZT0iZXZlbm9kZCIgc3Ryb2tlLXdpZHRoPSIxLjMiPgogICAgPHBhdGggZD0iTTEwNi43IDBIMTYwdjI2Ni43aC01My4zeiIvPgogICAgPHBhdGggZD0iTTAgMTA2LjdoMjY2LjdWMTYwSDB6Ii8+CiAgPC9nPgogIDxwYXRoIGZpbGw9IiMwZDVlYWYiIGQ9Ik0wIDQyNi43aDY0MFY0ODBIMHoiLz4KPC9zdmc+Cg==", "in": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiBpZD0iZmxhZy1pY29ucy1pbiIgdmlld0JveD0iMCAwIDY0MCA0ODAiPgogIDxwYXRoIGZpbGw9IiNmOTMiIGQ9Ik0wIDBoNjQwdjE2MEgweiIvPgogIDxwYXRoIGZpbGw9IiNmZmYiIGQ9Ik0wIDE2MGg2NDB2MTYwSDB6Ii8+CiAgPHBhdGggZmlsbD0iIzEyODgwNyIgZD0iTTAgMzIwaDY0MHYxNjBIMHoiLz4KICA8ZyB0cmFuc2Zvcm09Im1hdHJpeCgzLjIgMCAwIDMuMiAzMjAgMjQwKSI+CiAgICA8Y2lyY2xlIHI9IjIwIiBmaWxsPSIjMDA4Ii8+CiAgICA8Y2lyY2xlIHI9IjE3LjUiIGZpbGw9IiNmZmYiLz4KICAgIDxjaXJjbGUgcj0iMy41IiBmaWxsPSIjMDA4Ii8+CiAgICA8ZyBpZD0iaW4tZCI+CiAgICAgIDxnIGlkPSJpbi1jIj4KICAgICAgICA8ZyBpZD0iaW4tYiI+CiAgICAgICAgICA8ZyBpZD0iaW4tYSIgZmlsbD0iIzAwOCI+CiAgICAgICAgICAgIDxjaXJjbGUgcj0iLjkiIHRyYW5zZm9ybT0icm90YXRlKDcuNSAtOC44IDEzMy41KSIvPgogICAgICAgICAgICA8cGF0aCBkPSJNMCAxNy41LjYgNyAwIDJsLS42IDV6Ii8+CiAgICAgICAgICA8L2c+CiAgICAgICAgICA8dXNlIHhsaW5rOmhyZWY9IiNpbi1hIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiB0cmFuc2Zvcm09InJvdGF0ZSgxNSkiLz4KICAgICAgICA8L2c+CiAgICAgICAgPHVzZSB4bGluazpocmVmPSIjaW4tYiIgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgdHJhbnNmb3JtPSJyb3RhdGUoMzApIi8+CiAgICAgIDwvZz4KICAgICAgPHVzZSB4bGluazpocmVmPSIjaW4tYyIgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgdHJhbnNmb3JtPSJyb3RhdGUoNjApIi8+CiAgICA8L2c+CiAgICA8dXNlIHhsaW5rOmhyZWY9IiNpbi1kIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiB0cmFuc2Zvcm09InJvdGF0ZSgxMjApIi8+CiAgICA8dXNlIHhsaW5rOmhyZWY9IiNpbi1kIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiB0cmFuc2Zvcm09InJvdGF0ZSgtMTIwKSIvPgogIDwvZz4KPC9zdmc+Cg==", "br": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGlkPSJmbGFnLWljb25zLWJyIiB2aWV3Qm94PSIwIDAgNjQwIDQ4MCI+CiAgPGcgc3Ryb2tlLXdpZHRoPSIxcHQiPgogICAgPHBhdGggZmlsbD0iIzIyOWU0NSIgZmlsbC1ydWxlPSJldmVub2RkIiBkPSJNMCAwaDY0MHY0ODBIMHoiLz4KICAgIDxwYXRoIGZpbGw9IiNmOGU1MDkiIGZpbGwtcnVsZT0iZXZlbm9kZCIgZD0ibTMyMS40IDQzNiAzMDEuNS0xOTUuN0wzMTkuNiA0NCAxNy4xIDI0MC43eiIvPgogICAgPHBhdGggZmlsbD0iIzJiNDlhMyIgZmlsbC1ydWxlPSJldmVub2RkIiBkPSJNNDUyLjggMjQwYzAgNzAuMy01Ny4xIDEyNy4zLTEyNy42IDEyNy4zQTEyNy40IDEyNy40IDAgMSAxIDQ1Mi44IDI0MCIvPgogICAgPHBhdGggZmlsbD0iI2ZmZmZlZiIgZmlsbC1ydWxlPSJldmVub2RkIiBkPSJtMjgzLjMgMzE2LjMtNC0yLjMtNCAyIC45LTQuNS0zLjItMy40IDQuNS0uNSAyLjItNCAxLjkgNC4yIDQuNC44LTMuMyAzbTg2IDI2LjMtMy45LTIuMy00IDIgLjgtNC41LTMuMS0zLjMgNC41LS41IDIuMS00LjEgMiA0LjIgNC40LjgtMy40IDMuMW0tMzYuMi0zMC0zLjQtMi0zLjUgMS44LjgtMy45LTIuOC0yLjkgNC0uNCAxLjgtMy42IDEuNiAzLjcgMy45LjctMyAyLjdtODctOC41LTMuNC0yLTMuNSAxLjguOC0zLjktMi43LTIuOCAzLjktLjQgMS44LTMuNSAxLjYgMy42IDMuOC43LTIuOSAyLjZtLTg3LjMtMjItNC0yLjItNCAyIC44LTQuNi0zLjEtMy4zIDQuNS0uNSAyLjEtNC4xIDIgNC4yIDQuNC44LTMuNCAzLjJtLTEwNC42LTM1LTQtMi4yLTQgMiAxLTQuNi0zLjMtMy4zIDQuNi0uNSAyLTQuMSAyIDQuMiA0LjQuOC0zLjMgMy4xbTEzLjMgNTcuMi00LTIuMy00IDIgLjktNC41LTMuMi0zLjMgNC41LS42IDIuMS00IDIgNC4yIDQuNC44LTMuMyAzLjFtMTMyLTY3LjMtMy42LTItMy42IDEuOC44LTQtMi44LTMgNC0uNSAxLjktMy42IDEuNyAzLjggNCAuNy0zIDIuN20tNi43IDM4LjMtMi43LTEuNi0yLjkgMS40LjYtMy4yLTIuMi0yLjMgMy4yLS40IDEuNS0yLjggMS4zIDMgMyAuNS0yLjIgMi4ybS0xNDIuMiA1MC40LTIuNy0xLjUtMi43IDEuMy42LTMtMi4xLTIuMiAzLS40IDEuNC0yLjcgMS4zIDIuOCAzIC42LTIuMyAyTTQxOSAyOTkuOGwtMi4yLTEuMS0yLjIgMSAuNS0yLjMtMS43LTEuNiAyLjQtLjMgMS4yLTIgMSAyIDIuNS41LTEuOSAxLjUiLz4KICAgIDxwYXRoIGZpbGw9IiNmZmZmZWYiIGZpbGwtcnVsZT0iZXZlbm9kZCIgZD0ibTIxOS4zIDI4Ny42LTIuNy0xLjUtMi43IDEuMy42LTMtMi4xLTIuMiAzLS40IDEuNC0yLjcgMS4zIDIuOCAzIC42LTIuMyAyIi8+CiAgICA8cGF0aCBmaWxsPSIjZmZmZmVmIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGQ9Im0yMTkuMyAyODcuNi0yLjctMS41LTIuNyAxLjMuNi0zLTIuMS0yLjIgMy0uNCAxLjQtMi43IDEuMyAyLjggMyAuNi0yLjMgMm00Mi4zIDMtMi42LTEuNC0yLjcgMS4zLjYtMy0yLjEtMi4yIDMtLjQgMS40LTIuNyAxLjMgMi44IDMgLjUtMi4zIDIuMW0tNC44IDE3LTIuNi0xLjUtMi43IDEuNC42LTMtMi4xLTIuMyAzLS40IDEuNC0yLjcgMS4zIDIuOCAzIC42LTIuMyAybTg3LjQtMjIuMi0yLjYtMS42LTIuOCAxLjQuNi0zLTItMi4zIDMtLjMgMS40LTIuNyAxLjIgMi44IDMgLjUtMi4yIDIuMW0tMjUuMSAzLTIuNy0xLjUtMi43IDEuNC42LTMtMi0yLjMgMy0uMyAxLjQtMi44IDEuMiAyLjkgMyAuNS0yLjIgMi4xbS02OC44LTUuOC0xLjctMS0xLjcuOC40LTEuOS0xLjMtMS40IDEuOS0uMi44LTEuNy44IDEuOCAxLjkuMy0xLjQgMS4zbTE2Ny44IDQ1LjQtMi42LTEuNS0yLjcgMS40LjYtMy0yLjEtMi4zIDMtLjQgMS40LTIuNyAxLjMgMi44IDMgLjYtMi4zIDJtLTIwLjggNi0yLjItMS40LTIuMyAxLjIuNS0yLjYtMS43LTEuOCAyLjUtLjMgMS4yLTIuMyAxIDIuNCAyLjUuNC0xLjkgMS44bTEwLjQgMi4zLTItMS4yLTIuMSAxIC40LTIuMy0xLjYtMS43IDIuMy0uMyAxLjEtMiAxIDIgMi4zLjUtMS43IDEuNm0yOS4xLTIyLjgtMi0xLTIgMSAuNS0yLjMtMS42LTEuNyAyLjMtLjMgMS0yIDEgMi4xIDIuMS40LTEuNiAxLjZtLTM4LjggNDEuOC0yLjUtMS40LTIuNyAxLjIuNi0yLjgtMi0yIDMtLjMgMS4zLTIuNSAxLjIgMi42IDMgLjUtMi4zIDEuOW0uNiAxNC4yLTIuNC0xLjQtMi40IDEuMy42LTIuOC0xLjktMiAyLjctLjQgMS4yLTIuNSAxLjEgMi42IDIuNy41LTIgMm0tMTktMjMuMS0xLjktMS4yLTIgMSAuNC0yLjItMS41LTEuNyAyLjItLjIgMS0yIDEgMiAyLjIuNC0xLjYgMS42bS0xNy44IDIuMy0yLTEuMi0yIDEgLjUtMi4yLTEuNi0xLjcgMi4zLS4yIDEtMiAxIDIgMi4xLjQtMS42IDEuNm0tMzAuNC0yNC42LTItMS4xLTIgMSAuNS0yLjMtMS42LTEuNiAyLjItLjMgMS0yIDEgMiAyLjIuNS0xLjYgMS41bTMuNyA1Ny0xLjYtLjktMS44LjkuNC0yLTEuMy0xLjQgMS45LS4yLjktMS43LjggMS44IDEuOS4zLTEuNCAxLjNtLTQ2LjItODYuNi00LTIuMy00IDIgLjktNC41LTMuMi0zLjMgNC41LS42IDIuMi00IDEuOSA0LjIgNC40LjgtMy4zIDMuMSIvPgogICAgPHBhdGggZmlsbD0iI2ZmZiIgZmlsbC1ydWxlPSJldmVub2RkIiBkPSJNNDQ0LjQgMjg1LjhhMTI0LjYgMTI0LjYgMCAwIDAgNS44LTE5LjhjLTY3LjgtNTkuNS0xNDMuMy05MC0yMzguNy04My43YTEyNC41IDEyNC41IDAgMCAwLTguNSAyMC45YzExMy0xMC44IDE5NiAzOS4yIDI0MS40IDgyLjYiLz4KICAgIDxwYXRoIGZpbGw9IiMzMDllM2EiIGQ9Im00MTQgMjUyLjQgMi4zIDEuM2EzLjQgMy40IDAgMCAwLS4zIDIuMiAzIDMgMCAwIDAgMS40IDEuN2MuNy41IDEuNC44IDIgLjcuNiAwIDEtLjMgMS4zLS43YTEuMyAxLjMgMCAwIDAgLjItLjkgMi4zIDIuMyAwIDAgMC0uNS0xYy0uMi0uMy0uNy0xLTEuNS0xLjhhNy43IDcuNyAwIDAgMS0xLjgtMyAzLjcgMy43IDAgMCAxIDItNC40IDMuOCAzLjggMCAwIDEgMi4zLS4yIDcgNyAwIDAgMSAyLjYgMS4yYzEuNCAxIDIuMyAyIDIuNiAzLjJhNC4xIDQuMSAwIDAgMS0uNiAzLjNsLTIuNC0xLjVjLjMtLjYuNC0xLjIuMi0xLjctLjEtLjUtLjUtMS0xLjItMS40YTMuMiAzLjIgMCAwIDAtMS44LS43IDEgMSAwIDAgMC0uOS41Yy0uMi4zLS4yLjYtLjEgMXMuNiAxLjIgMS42IDIuMmMxIDEgMS42IDEuOSAyIDIuNWEzLjkgMy45IDAgMCAxLS4zIDQuMiA0LjEgNC4xIDAgMCAxLTEuOSAxLjUgNCA0IDAgMCAxLTIuNC4zYy0uOS0uMi0xLjgtLjYtMi44LTEuMy0xLjUtMS0yLjQtMi4xLTIuNy0zLjNhNS40IDUuNCAwIDAgMSAuNi00em0tMTEuNi03LjYgMi41IDEuM2EzLjQgMy40IDAgMCAwLS4yIDIuMiAzIDMgMCAwIDAgMS40IDEuNmMuOC41IDEuNC43IDIgLjYuNiAwIDEtLjMgMS4zLS44YTEuMyAxLjMgMCAwIDAgLjItLjhjMC0uMy0uMi0uNy0uNS0xYTM0LjYgMzQuNiAwIDAgMC0xLjYtMS44Yy0xLjEtMS4xLTEuOC0yLTItMi44YTMuNyAzLjcgMCAwIDEgLjQtMy4xIDMuNiAzLjYgMCAwIDEgMS42LTEuNCAzLjggMy44IDAgMCAxIDIuMi0uMyA3IDcgMCAwIDEgMi42IDFjMS41IDEgMi40IDIgMi43IDMuMWE0LjEgNC4xIDAgMCAxLS40IDMuNGwtMi41LTEuNGMuMy0uNy40LTEuMi4yLTEuN3MtLjYtMS0xLjMtMS40YTMuMiAzLjIgMCAwIDAtMS45LS42IDEgMSAwIDAgMC0uOC41Yy0uMi4zLS4yLjYtLjEgMXMuNyAxLjIgMS43IDIuMmMxIDEgMS43IDEuOCAyIDIuNGEzLjkgMy45IDAgMCAxIDAgNC4yIDQuMiA0LjIgMCAwIDEtMS44IDEuNiA0IDQgMCAwIDEtMi40LjMgOCA4IDAgMCAxLTIuOS0xLjEgNiA2IDAgMCAxLTIuOC0zLjIgNS40IDUuNCAwIDAgMSAuNC00bS0xNC4yLTMuOCA3LjMtMTIgOC44IDUuNS0xLjIgMi02LjQtNC0xLjYgMi43IDYgMy43LTEuMyAyLTYtMy43LTIgMy4zIDYuNyA0LTEuMiAyem0tMjAuNy0xNyAxLjEtMiA1LjQgMi43LTIuNSA1Yy0uOC4yLTEuOC4zLTMgLjJhOS40IDkuNCAwIDAgMS0zLjMtMSA3LjcgNy43IDAgMCAxLTMtMi42IDYgNiAwIDAgMS0xLTMuNSA4LjYgOC42IDAgMCAxIDEtMy43IDggOCAwIDAgMSAyLjYtMyA2LjIgNi4yIDAgMCAxIDMuNi0xLjFjMSAwIDIgLjMgMy4yIDEgMS42LjcgMi42IDEuNyAzLjEgMi44YTUgNSAwIDAgMSAuMyAzLjVsLTIuNy0uOGEzIDMgMCAwIDAtLjItMmMtLjMtLjYtLjgtMS0xLjYtMS40YTMuOCAzLjggMCAwIDAtMy4xLS4zYy0xIC4zLTEuOSAxLjItMi42IDIuNi0uNyAxLjQtMSAyLjctLjcgMy44YTMuNyAzLjcgMCAwIDAgMiAyLjRjLjUuMyAxLjEuNSAxLjcuNWE2IDYgMCAwIDAgMS44IDBsLjgtMS42em0tOTAuMi0yMi4zIDItMTQgNC4yLjcgMS4xIDkuOCAzLjktOSA0LjIuNi0yIDEzLjgtMi43LS40IDEuNy0xMC45LTQuNCAxMC41LTIuNy0uNC0xLjEtMTEuMy0xLjYgMTF6bS0xNC4xLTEuNyAxLjMtMTQgMTAuMyAxLS4yIDIuNC03LjUtLjctLjMgMyA3IC43LS4zIDIuNC03LS43LS4zIDMuOCA3LjguNy0uMiAyLjR6Ii8+CiAgICA8ZyBzdHJva2Utb3BhY2l0eT0iLjUiPgogICAgICA8cGF0aCBmaWxsPSIjMzA5ZTNhIiBkPSJNMjE2LjUgMTkxLjNjMC0xLjUuMy0yLjYuNy0zLjZhNi43IDYuNyAwIDAgMSAxLjQtMS45IDUuNCA1LjQgMCAwIDEgMS44LTEuMmMxLS4zIDItLjUgMy0uNSAyLjEgMCAzLjcuOCA1IDJhNy40IDcuNCAwIDAgMSAxLjYgNS41YzAgMi4yLS43IDQtMiA1LjNhNi41IDYuNSAwIDAgMS01IDEuNyA2LjYgNi42IDAgMCAxLTQuOC0yIDcuMyA3LjMgMCAwIDEtMS43LTUuMyIvPgogICAgICA8cGF0aCBmaWxsPSIjZjdmZmZmIiBkPSJNMjE5LjQgMTkxLjNjMCAxLjUuMyAyLjcgMSAzLjYuNy44IDEuNiAxLjMgMi44IDEuM2EzLjUgMy41IDAgMCAwIDIuOC0xLjFjLjctLjggMS0yIDEuMS0zLjcgMC0xLjYtLjItMi44LTEtMy42YTMuNSAzLjUgMCAwIDAtMi43LTEuMyAzLjYgMy42IDAgMCAwLTIuOCAxLjJjLS44LjgtMS4xIDItMS4yIDMuNiIvPgogICAgPC9nPgogICAgPGcgc3Ryb2tlLW9wYWNpdHk9Ii41Ij4KICAgICAgPHBhdGggZmlsbD0iIzMwOWUzYSIgZD0ibTIzMyAxOTguNS4yLTE0aDZjMS41IDAgMi41LjIgMy4yLjUuNy4yIDEuMi43IDEuNiAxLjNzLjYgMS40LjYgMi4zYTMuOCAzLjggMCAwIDEtMSAyLjYgNC41IDQuNSAwIDAgMS0yLjcgMS4ybDEuNSAxLjJjLjQuNC45IDEuMiAxLjUgMi4zbDEuNyAyLjhoLTMuNGwtMi0zLjItMS40LTJhMi4xIDIuMSAwIDAgMC0uOS0uNiA1IDUgMCAwIDAtMS40LS4yaC0uNnY1Ljh6Ii8+CiAgICAgIDxwYXRoIGZpbGw9IiNmZmYiIGQ9Ik0yMzYgMTkwLjVoMmMxLjQgMCAyLjMgMCAyLjYtLjIuMyAwIC42LS4zLjgtLjVzLjMtLjcuMy0xYzAtLjYtLjEtMS0uNC0xLjItLjItLjMtLjYtLjUtMS0uNmgtMmwtMi4zLS4xeiIvPgogICAgPC9nPgogICAgPGcgc3Ryb2tlLW9wYWNpdHk9Ii41Ij4KICAgICAgPHBhdGggZmlsbD0iIzMwOWUzYSIgZD0ibTI0OSAxODUuMiA1LjIuM2MxLjEgMCAyIC4xIDIuNi4zYTQuNyA0LjcgMCAwIDEgMiAxLjQgNiA2IDAgMCAxIDEuMiAyLjRjLjMuOS40IDIgLjMgMy4zYTkuMyA5LjMgMCAwIDEtLjUgM2MtLjQgMS0xIDEuOC0xLjcgMi40YTUgNSAwIDAgMS0yIDFjLS42LjItMS41LjItMi41LjJsLTUuMy0uM3oiLz4KICAgICAgPHBhdGggZmlsbD0iI2ZmZiIgZD0ibTI1MS43IDE4Ny43LS41IDkuM2gzLjhjLjUgMCAuOS0uMiAxLjItLjUuMy0uMy42LS43LjgtMS4zLjItLjYuNC0xLjUuNC0yLjZsLS4xLTIuNWEzLjIgMy4yIDAgMCAwLS44LTEuNCAyLjcgMi43IDAgMCAwLTEuMi0uNyAxMyAxMyAwIDAgMC0yLjMtLjN6Ii8+CiAgICA8L2c+CiAgICA8ZyBzdHJva2Utb3BhY2l0eT0iLjUiPgogICAgICA8cGF0aCBmaWxsPSIjMzA5ZTNhIiBkPSJtMzE3LjYgMjEwLjIgMy4zLTEzLjYgNC40IDEgMy4yIDFjLjcuNCAxLjMgMSAxLjYgMS45LjQuOC40IDEuNy4yIDIuOC0uMi44LS41IDEuNS0xIDJhMy45IDMuOSAwIDAgMS0zIDEuNGMtLjcgMC0xLjctLjItMy0uNWwtMS43LS41LTEuMiA1LjJ6Ii8+CiAgICAgIDxwYXRoIGZpbGw9IiNmZmYiIGQ9Im0zMjMgMTk5LjYtLjggMy44IDEuNS40YzEgLjIgMS44LjQgMi4yLjNhMS45IDEuOSAwIDAgMCAxLjYtMS41YzAtLjUgMC0uOS0uMi0xLjNhMiAyIDAgMCAwLTEtLjlsLTEuOS0uNS0xLjMtLjN6Ii8+CiAgICA8L2c+CiAgICA8ZyBzdHJva2Utb3BhY2l0eT0iLjUiPgogICAgICA8cGF0aCBmaWxsPSIjMzA5ZTNhIiBkPSJtMzMwLjYgMjE0LjEgNC43LTEzLjIgNS41IDJjMS41LjUgMi40IDEgMyAxLjQuNS41LjkgMSAxIDEuOHMuMiAxLjUgMCAyLjNjLS40IDEtMSAxLjctMS44IDIuMi0uOC40LTEuOC41LTMgLjMuNC41LjggMSAxIDEuNmwuOCAyLjcuNiAzLjEtMy4xLTEuMS0xLTMuNmExOS41IDE5LjUgMCAwIDAtLjctMi40IDIuMSAyLjEgMCAwIDAtLjYtLjhjLS4yLS4zLS42LS41LTEuMy0uN2wtLjUtLjItMiA1LjZ6Ii8+CiAgICAgIDxwYXRoIGZpbGw9IiNmZmYiIGQ9Im0zMzYgMjA3LjQgMS45LjdjMS4zLjUgMi4xLjcgMi41LjcuMyAwIC42IDAgLjktLjMuMy0uMi41LS41LjYtLjkuMi0uNC4yLS44IDAtMS4yYTEuNyAxLjcgMCAwIDAtLjgtLjlsLTItLjctMi0uNy0xLjIgMy4zeiIvPgogICAgPC9nPgogICAgPGcgc3Ryb2tlLW9wYWNpdHk9Ii41Ij4KICAgICAgPHBhdGggZmlsbD0iIzMwOWUzYSIgZD0iTTM0NyAyMTMuNmE5IDkgMCAwIDEgMS43LTMuMiA2LjYgNi42IDAgMCAxIDEuOC0xLjUgNiA2IDAgMCAxIDItLjdjMSAwIDIgMCAzLjEuNGE2LjUgNi41IDAgMCAxIDQuMiAzLjNjLjggMS42LjggMy41LjIgNS43YTcuNCA3LjQgMCAwIDEtMy40IDQuNWMtMS41LjktMy4zIDEtNS4yLjRhNi42IDYuNiAwIDAgMS00LjItMy4zIDcuMyA3LjMgMCAwIDEtLjItNS42Ii8+CiAgICAgIDxwYXRoIGZpbGw9IiNmZmYiIGQ9Ik0zNDkuOCAyMTQuNGMtLjQgMS41LS41IDIuOCAwIDMuOHMxLjIgMS42IDIuMyAyYzEgLjMgMiAuMiAzLS40IDEtLjUgMS42LTEuNiAyLjEtMy4yLjUtMS41LjUtMi43IDAtMy43YTMuNSAzLjUgMCAwIDAtMi4yLTIgMy42IDMuNiAwIDAgMC0zIC4zYy0xIC42LTEuNyAxLjYtMi4yIDMuMiIvPgogICAgPC9nPgogICAgPGcgc3Ryb2tlLW9wYWNpdHk9Ii41Ij4KICAgICAgPHBhdGggZmlsbD0iIzMwOWUzYSIgZD0ibTM3NC4zIDIzMy4xIDYuNC0xMi40IDUuMyAyLjdhMTAgMTAgMCAwIDEgMi43IDEuOWMuNS41LjggMS4xLjggMS45czAgMS41LS40IDIuMmEzLjggMy44IDAgMCAxLTIgMmMtMSAuMi0yIC4yLTMuMS0uMi40LjYuNiAxLjIuOCAxLjcuMi42LjMgMS41LjQgMi44bC4yIDMuMi0zLTEuNS0uNC0zLjdhMjAgMjAgMCAwIDAtLjMtMi41IDIgMiAwIDAgMC0uNS0xbC0xLjItLjctLjUtLjMtMi43IDUuMnoiLz4KICAgICAgPHBhdGggZmlsbD0iI2ZmZiIgZD0ibTM4MC41IDIyNy4yIDEuOSAxYzEuMi42IDIgMSAyLjMgMSAuMyAwIC43IDAgMS0uMi4zLS4xLjUtLjQuNy0uOC4yLS40LjMtLjguMi0xLjJhMiAyIDAgMCAwLS43LTEgMjMuNyAyMy43IDAgMCAwLTEuOC0xbC0yLTF6Ii8+CiAgICA8L2c+CiAgICA8ZyBzdHJva2Utb3BhY2l0eT0iLjUiPgogICAgICA8cGF0aCBmaWxsPSIjMzA5ZTNhIiBkPSJNNDI2LjEgMjU4LjdhOC45IDguOSAwIDAgMSAyLjUtMi42IDYuNiA2LjYgMCAwIDEgMi4yLS45IDUuNSA1LjUgMCAwIDEgMi4yIDBjMSAuMiAxLjkuNiAyLjggMS4yYTYuNiA2LjYgMCAwIDEgMyA0LjRjLjMgMS43LS4yIDMuNi0xLjQgNS41YTcuMyA3LjMgMCAwIDEtNC41IDMuMyA2LjUgNi41IDAgMCAxLTUuMi0xLjEgNi42IDYuNiAwIDAgMS0zLTQuNGMtLjMtMS44LjItMy42IDEuNC01LjQiLz4KICAgICAgPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTQyOC42IDI2MC4zYy0xIDEuMy0xLjMgMi41LTEuMSAzLjZhMy42IDMuNiAwIDAgMCAxLjYgMi41YzEgLjcgMiAuOSAzIC42IDEtLjMgMi0xIDIuOS0yLjQuOS0xLjQgMS4zLTIuNiAxLjEtMy42LS4xLTEtLjctMS45LTEuNi0yLjZzLTItLjgtMy0uNWMtMSAuMi0yIDEtMyAyLjR6Ii8+CiAgICA8L2c+CiAgICA8cGF0aCBmaWxsPSIjMzA5ZTNhIiBkPSJtMzAxLjggMjA0LjUgMi4zLTkuOCA3LjIgMS43LS4zIDEuNi01LjMtMS4yLS41IDIuMiA0LjkgMS4xLS40IDEuNy00LjktMS4yLS42IDIuNyA1LjUgMS4zLS40IDEuNnoiLz4KICA8L2c+Cjwvc3ZnPgo=", "no": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGlkPSJmbGFnLWljb25zLW5vIiB2aWV3Qm94PSIwIDAgNjQwIDQ4MCI+CiAgPHBhdGggZmlsbD0iI2VkMjkzOSIgZD0iTTAgMGg2NDB2NDgwSDB6Ii8+CiAgPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTE4MCAwaDEyMHY0ODBIMTgweiIvPgogIDxwYXRoIGZpbGw9IiNmZmYiIGQ9Ik0wIDE4MGg2NDB2MTIwSDB6Ii8+CiAgPHBhdGggZmlsbD0iIzAwMjY2NCIgZD0iTTIxMCAwaDYwdjQ4MGgtNjB6Ii8+CiAgPHBhdGggZmlsbD0iIzAwMjY2NCIgZD0iTTAgMjEwaDY0MHY2MEgweiIvPgo8L3N2Zz4K"};
+  const COLS = "ABCDEFGHIJKLMNOPQRST";
+  const N = 20;
+  const HOLD_MS = 520;
+  const coord = (x, y) => COLS[x] + (y + 1);
+  const img = (id, cls) => `<img class="flag-img${cls ? " " + cls : ""}" src="${FLAG_SRC[id]}" alt="">`;
+  const who = (t) => `${t.player}<span class="cty"> · ${t.name}</span>`;
+  // a glossy heart: full = red with a dark edge and a shine; empty = a hollow slot
+  const heartSvg = (full) => `<svg viewBox="-.5 -.5 21 19" aria-hidden="true"><path d="M10 17 C4 12.5 1 9.5 1 5.8 C1 3 3.2 1 5.6 1 C7.6 1 9 2.2 10 3.8 C11 2.2 12.4 1 14.4 1 C16.8 1 19 3 19 5.8 C19 9.5 16 12.5 10 17 Z" fill="${full ? "var(--heart)" : "var(--panel-2)"}" stroke="${full ? "var(--heart-edge)" : "var(--edge-lip)"}" stroke-width="1.8" stroke-linejoin="round"/>${full ? `<ellipse cx="5.8" cy="5.6" rx="2" ry="1.3" fill="#fff" opacity=".7" transform="rotate(-35 5.8 5.6)"/>` : ""}</svg>`;
+  const still = matchMedia("(prefers-reduced-motion: reduce)");
+  const $ = (id) => document.getElementById(id);
+  const root = document.documentElement;
+
+  // ---------- sample game (h = hidden hearts; in the real game only the server knows them) ----------
+  const tanks = [
+    { id: "us", name: "United States", player: "Sam", x: 6, y: 11, you: true },
+    { id: "jp", name: "Japan", player: "Maya", x: 8, y: 9, h: 3 },
+    { id: "ng", name: "Nigeria", player: "Theo", x: 5, y: 13, h: 2 },
+    { id: "ch", name: "Switzerland", player: "Priya", x: 9, y: 11, h: 2 },
+    { id: "fr", name: "France", player: "Ben", x: 2, y: 3, h: 3 },
+    { id: "de", name: "Germany", player: "Lena", dead: true },
+    { id: "it", name: "Italy", player: "Omar", dead: true },
+    { id: "se", name: "Sweden", player: "Ruth", x: 17, y: 6, h: 3 },
+    { id: "ua", name: "Ukraine", player: "Jonah", x: 13, y: 10, h: 1 },
+    { id: "nl", name: "Netherlands", player: "Ivy", x: 18, y: 12, h: 3 },
+    { id: "cl", name: "Chile", player: "Caleb", x: 3, y: 18, h: 3 },
+    { id: "gr", name: "Greece", player: "Nora", dead: true },
+    { id: "in", name: "India", player: "Eli", x: 7, y: 17, h: 3 },
+    { id: "br", name: "Brazil", player: "Grace", x: 2, y: 8, h: 3 },
+    { id: "no", name: "Norway", player: "Felix", x: 16, y: 19, h: 2 },
+  ];
+  const me = tanks[0];
+  const S = {
+    juror: false, hearts: 2, ap: 3, range: 2,
+    panel: null,    // the open action panel: "menu" | "move" | "pick" | "target" | "extend"
+    pick: null,     // "attack" | "give" when the action was chosen from the menu
+    sel: null,      // id of the targeted tank
+    move: null,     // {x, y} of the aimed move
+    vote: null,
+    sheet: null,    // "news" | "you" | "jury" | "settings"
+    unread: { news: 2, you: 1 },
+  };
+  const tally = { jp: 1, cl: 1 };
+  const news = [
+    { t: "Day 12 · 22:06", text: "Switzerland moved K12 → J12.", new: true },
+    { t: "Day 12 · 22:01", text: "Japan moved I11 → I10.", new: true },
+    { t: "Day 12 · 22:00", text: "Each living tank got 1 AP." },
+    { t: "Day 11 · 14:37", text: "Brazil moved C8 → C9." },
+    { t: "Day 11 · 22:06", text: "Greece was destroyed." },
+    { t: "Day 11 · 22:00", text: "Each living tank got 1 AP." },
+    { t: "Day 10 · 22:09", text: "Italy was destroyed." },
+    { t: "Day 9 · 22:03", text: "Germany was destroyed." },
+  ];
+  const mineLive = [
+    { t: "Day 12 · 22:04", text: "You gave 1 AP to Nigeria." },
+    { t: "Day 11 · 22:02", text: "💔 You lost a heart. The shooter is not known.", new: true },
+    { t: "Day 10 · 22:03", text: "You moved F12 → G12." },
+  ];
+  const mineDead = [
+    { t: "Day 11 · 22:06", text: "☠️ Japan destroyed your tank. You are on the jury now.", new: true },
+    ...mineLive.slice(1),
+  ];
+  const mine = () => (S.juror ? mineDead : mineLive);
+
+  const living = () => tanks.filter((t) => !t.dead && !(t.you && S.juror));
+  const at = (x, y) => living().find((t) => t.x === x && t.y === y);
+  const inBoard = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
+  // Range: the square of size R around the tank, plus one more square straight out from the middle of each side.
+  const inRange = (cx, cy, x, y, R) => {
+    const dx = Math.abs(cx - x), dy = Math.abs(cy - y);
+    return Math.max(dx, dy) <= R || ((dx === 0 || dy === 0) && dx + dy <= R + 1);
+  };
+  const inReach = () => living().filter((t) => !t.you && inRange(me.x, me.y, t.x, t.y, S.range));
+  const canStep = (x, y) => inBoard(x, y) && !at(x, y);
+  const stamp = () => "Day 12 · " + new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
+  const logNews = (text) => news.unshift({ t: stamp(), text });
+  const logMine = (text) => mineLive.unshift({ t: stamp(), text });
+  const clearAim = () => { S.panel = null; S.pick = null; S.sel = null; S.move = null; };
+  const trayOpen = () => !!S.panel;
+
+  // ---------- range outline geometry ----------
+  function outline(cx, cy, R, cell) {
+    const inside = (x, y) => inBoard(x, y) && inRange(cx, cy, x, y, R);
+    const next = new Map();
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      if (!inside(x, y)) continue;
+      if (!inside(x, y - 1)) next.set(`${x},${y}`, [x + 1, y]);
+      if (!inside(x + 1, y)) next.set(`${x + 1},${y}`, [x + 1, y + 1]);
+      if (!inside(x, y + 1)) next.set(`${x + 1},${y + 1}`, [x, y + 1]);
+      if (!inside(x - 1, y)) next.set(`${x},${y + 1}`, [x, y]);
+    }
+    let d = "";
+    while (next.size) {
+      const start = next.keys().next().value;
+      let k = start, pts = [];
+      do { pts.push(k.split(",").map(Number)); const n = next.get(k); next.delete(k); k = n.join(","); } while (k !== start && next.has(k));
+      pts = pts.filter((p, i) => {
+        const a = pts[(i - 1 + pts.length) % pts.length], b = pts[(i + 1) % pts.length];
+        return !((a[0] === p[0] && p[0] === b[0]) || (a[1] === p[1] && p[1] === b[1]));
+      });
+      d += "M" + pts.map(([x, y]) => `${(x * cell).toFixed(1)} ${(y * cell).toFixed(1)}`).join(" L") + " Z ";
+    }
+    return d;
+  }
+
+  function renderShapes() {
+    const W = $("board").clientWidth || 360, cell = W / N;
+    const boil = still.matches ? "" : `<animate attributeName="seed" values="1;2;3;4;5;6" dur="1.1s" calcMode="discrete" repeatCount="indefinite"/>`;
+    const defs = `<defs><filter id="boil" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="${(0.9 / cell).toFixed(4)}" numOctaves="1" seed="1">${boil}</feTurbulence><feDisplacementMap in="SourceGraphic" scale="${Math.min(3.2, cell / 7).toFixed(2)}" xChannelSelector="R" yChannelSelector="G"/></filter></defs>`;
+    let zone = "", lines = "";
+    if (!S.juror) {
+      const now = outline(me.x, me.y, S.range, cell);
+      let prev = null, kind = "";
+      if (S.panel === "move" && S.move) { prev = outline(S.move.x, S.move.y, S.range, cell); kind = "move"; }
+      else if (S.panel === "extend") { prev = outline(me.x, me.y, S.range + 1, cell); kind = "extend"; }
+      zone = `<path d="${kind === "move" ? prev : now}"/>`;
+      lines = `<path class="now ${prev ? "faint" : ""}" d="${now}" filter="url(#boil)"/>` + (prev ? `<path class="preview ${kind}" d="${prev}" filter="url(#boil)"/>` : "");
+    }
+    for (const id of ["zone", "lines"]) $(id).setAttribute("viewBox", `0 0 ${W} ${W}`);
+    $("zone").innerHTML = zone;
+    $("lines").innerHTML = defs + lines;
+  }
+
+  // ---------- board ----------
+  const pos = (x, y) => `left:${x * 5}%;top:${y * 5}%`;
+  function renderBoard() {
+    const counts = { ...tally };
+    if (S.vote) counts[S.vote] = (counts[S.vote] || 0) + 1;
+    const sel = S.panel === "target" ? living().find((t) => t.id === S.sel) : null;
+    const cands = !S.juror && S.panel === "pick" ? new Set(inReach().map((t) => t.id)) : null;
+    let html = "";
+    for (const t of living()) {
+      const c = ["piece"];
+      if (t.you) c.push("you");
+      if (cands && cands.has(t.id)) c.push("cand", S.pick);
+      if (sel && t.id === sel.id) {
+        c.push("picked");
+        if (S.juror) c.push("vote");
+        else if (!inRange(me.x, me.y, t.x, t.y, S.range)) c.push("far");
+      }
+      const badge = S.juror && counts[t.id] ? `<span class="votes">${counts[t.id]}</span>` : "";
+      const nm = `<span class="nm ${t.y === N - 1 ? "up" : ""} ${t.x === 0 ? "l" : t.x === N - 1 ? "r" : ""}">${t.player}</span>`;
+      html += `<span class="${c.join(" ")}" data-id="${t.id}" style="${pos(t.x, t.y)}">${img(t.id)}${nm}${badge}</span>`;
+    }
+    if (S.panel === "move" && S.move) html += `<span class="piece ghost" style="${pos(S.move.x, S.move.y)}">${img(me.id)}</span>`;
+    $("pieces").innerHTML = html;
+    renderShapes();
+  }
+
+  function fx(kind, x, y, text, color, extra) {
+    if (still.matches) return;
+    const d = document.createElement("div");
+    d.className = "fx-" + kind + (extra ? " " + extra : "");
+    d.style.left = (kind === "tag" ? Math.min(Math.max(x + 0.5, 3.5), 16.5) : x + 0.5) * 5 + "%";
+    d.style.top = (kind === "tag" ? Math.max(0.8, y - 0.4) : y + 0.5) * 5 + "%";
+    if (color) d.style.setProperty("--c", color);
+    if (text) d.textContent = text;
+    $("fx").appendChild(d);
+    setTimeout(() => d.remove(), kind === "tag" ? 1700 : 1200);
+  }
+
+  // ---------- HUD (read-only) ----------
+  let prevStats = { ap: S.ap, range: S.range };
+  const popIf = (el, changed) => { if (changed) { el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop"); } };
+  function hudFloat(el, text) {
+    if (still.matches) return;
+    const f = document.createElement("i");
+    f.className = "hud-float";
+    f.textContent = text;
+    el.parentElement.appendChild(f);
+    setTimeout(() => f.remove(), 900);
+  }
+  function renderHud() {
+    $("hearts").innerHTML = S.juror ? `<span class="dead">Destroyed</span>` : [0, 1, 2].map((i) => heartSvg(i < S.hearts)).join("");
+    $("stat-ap").hidden = S.juror;
+    $("stat-rng").hidden = S.juror;
+    $("ap").textContent = S.ap;
+    $("rng").textContent = S.range;
+    popIf($("ap"), prevStats.ap !== S.ap);
+    popIf($("rng"), prevStats.range !== S.range);
+    if (S.ap < prevStats.ap) hudFloat($("ap"), `−${prevStats.ap - S.ap}`);
+    prevStats = { ap: S.ap, range: S.range };
+    $("timer-label").textContent = S.juror ? "Vote closes" : "Next AP";
+  }
+
+  // ---------- action panel ----------
+  // Text rule: show only what the screen does not already show (AP and range are in the HUD; the board shows positions).
+  const holdBtn = (kind, label, cost, ok, tilt) =>
+    `<button type="button" class="btn hold c-${kind} ${tilt ? "tilt-r" : ""}" data-hold="${kind}" ${ok ? "" : "disabled"}><span class="fill"></span><span class="lbl">${label}</span><span class="cost">${cost}</span></button>`;
+  const pickRow = (list, empty) => list.length
+    ? `<div class="pick-row">${list.map((t) => `<button type="button" class="pick" data-target="${t.id}" aria-label="${t.player}, ${t.name}">${img(t.id)}<span>${t.player}</span></button>`).join("")}</div>`
+    : `<div class="chip">${empty}</div>`;
+  const nav = (back) => `<div class="tray-nav">${back ? `<button type="button" class="btn nav c-back" data-back><span class="lbl">‹ Back</span></button>` : ""}<button type="button" class="btn nav c-cancel" data-cancel><span class="lbl">✕ Cancel</span></button></div>`;
+  const lead = (k, ico) => `<span class="lead c-${k}" aria-hidden="true">${ico}</span>`;
+  let shown = "";
+  function renderTray() {
+    const sel = living().find((t) => t.id === S.sel);
+    const key = S.panel ? `${S.panel}:${S.pick || ""}:${S.panel === "target" ? S.sel : ""}` : "";
+    const fresh = !!key && shown !== key;
+    const dl = fresh ? " deal" : "";
+    const headRow = (first, title, meta, metaCls) =>
+      `<div class="tray-head${dl}">${first}<div><div class="title">${title}</div>${meta ? `<div class="meta ${metaCls || ""}">${meta}</div>` : ""}</div></div>`;
+    let head = "", actions = "", back = false, hand = false, open = !!S.panel;
+    if (S.juror) {
+      if (S.panel === "target" && sel) {
+        const n = (tally[sel.id] || 0) + (S.vote === sel.id ? 1 : 0);
+        head = headRow(img(sel.id, "flag-card"), who(sel), `${n} ${n === 1 ? "vote" : "votes"} tonight`);
+        actions = S.vote === sel.id
+          ? `<div class="chip">✓ Your vote</div>`
+          : `<button type="button" class="btn c-vote" data-vote><span class="lbl">🗳️ Vote</span><span class="cost">free</span></button>`;
+        back = true;
+      } else if (S.panel) {
+        const v = tanks.find((t) => t.id === S.vote);
+        head = headRow(lead("vote", "🗳️"), "Pick a tank to vote for", v ? `your vote: ${v.player}` : "");
+        actions = pickRow(living(), "No living tanks.");
+      }
+    } else if (S.panel === "menu") {
+      hand = true;
+      const card = (k, ico, label, cost, i) => `<button type="button" class="btn card c-${k}" style="--i:${i}" data-open="${k}" ${S.ap >= cost ? "" : "disabled"}><span class="tag">${cost} AP</span><span class="ti" aria-hidden="true">${ico}</span><span class="tl">${label}</span></button>`;
+      actions = card("move", "🧭", "Move", 1, 0) + card("attack", "💥", "Shoot", 1, 1) + card("give", "🎁", "Give AP", 1, 2) + card("extend", "📡", "Extend", 2, 3);
+    } else if (S.panel === "move") {
+      const aimed = !!S.move;
+      const d = aimed ? `${S.move.x - me.x},${S.move.y - me.y}` : "";
+      const arrow = (dir, ch, name) => `<button type="button" class="btn arrow ${d === dir ? "on" : ""}" data-dir="${dir}" aria-label="Aim ${name}">${ch}</button>`;
+      head = headRow(lead("move", "🧭"), aimed ? `Destination: ${coord(S.move.x, S.move.y)}` : "Pick a direction");
+      actions = `<div class="dpad">${arrow("-1,0", "←", "left")}${arrow("0,-1", "↑", "up")}${arrow("0,1", "↓", "down")}${arrow("1,0", "→", "right")}</div>` + holdBtn("move", "🧭 Move", "1 AP", aimed && S.ap >= 1);
+      back = true;
+    } else if (S.panel === "pick") {
+      head = headRow(lead(S.pick, S.pick === "attack" ? "💥" : "🎁"), S.pick === "attack" ? "Pick a tank to shoot" : "Pick a tank to give 1 AP");
+      actions = pickRow(inReach(), "No tank is in range.");
+      back = true;
+    } else if (S.panel === "target" && sel) {
+      const inR = inRange(me.x, me.y, sel.x, sel.y, S.range);
+      const ok = inR && S.ap >= 1;
+      head = headRow(img(sel.id, "flag-card"), who(sel), inR ? "" : "out of range", "bad");
+      const atk = holdBtn("attack", "💥 Shoot", "1 AP", ok), give = holdBtn("give", "🎁 Give AP", "1 AP", ok, true);
+      actions = S.pick === "attack" ? atk : S.pick === "give" ? give : atk + give;
+      back = true;
+    } else if (S.panel === "extend") {
+      head = headRow(lead("extend", "📡"), `Range ${S.range} → ${S.range + 1}`, "the long-dash line shows the new range");
+      actions = holdBtn("extend", "📡 Extend", "2 AP", S.ap >= 2);
+      back = true;
+    } else open = false;
+    const tray = $("tray");
+    tray.classList.toggle("open", open);
+    tray.inert = !open;
+    const cls = hand ? "tray-actions hand" + (fresh ? " dealt" : "") : "tray-actions" + dl;
+    if (open) tray.innerHTML = `${head}<div class="${cls}">${actions}</div>${nav(back)}`;
+    shown = open ? key : "";
+  }
+
+  // ---------- opening panels ----------
+  function openMenu() { S.panel = "menu"; S.pick = null; S.sel = null; S.move = null; S.sheet = null; render(); }
+  function openAction(k) {
+    if (S.juror) return;
+    S.sheet = null; S.sel = null; S.move = null; S.pick = null;
+    if (k === "move") S.panel = "move";
+    else if (k === "extend") S.panel = "extend";
+    else { S.panel = "pick"; S.pick = k; }
+    render();
+  }
+  function goBack() {
+    if (S.panel === "target" && S.pick) { S.panel = "pick"; S.sel = null; render(); }
+    else openMenu();
+  }
+
+  // ---------- tabs + sheets ----------
+  const SHEETS = {
+    news: { ico: "📰", title: "News" },
+    you: { ico: "📬", title: "You" },
+    jury: { ico: "⚖️", title: "Jury" },
+    settings: { ico: "⚙️", title: "Settings" },
+  };
+  const logList = (rows) => `<div class="well"><ul class="log">${rows.map((e) => `<li class="${e.new ? "new" : ""}"><time>${e.t}</time><span>${e.text}</span></li>`).join("")}</ul></div>`;
+  function renderTabs() {
+    document.querySelectorAll("[data-tab]").forEach((b) => b.setAttribute("aria-expanded", b.dataset.tab === "actions" ? !!S.panel : S.sheet === b.dataset.tab));
+    const act = document.querySelector('[data-tab="actions"]');
+    act.querySelector(".ico").textContent = S.juror ? "🗳️" : "⚔️";
+    act.querySelector(".t").textContent = S.juror ? "Vote" : "Actions";
+    for (const k of ["news", "you"]) {
+      const b = document.querySelector(`[data-badge="${k}"]`);
+      b.textContent = S.unread[k] || "";
+      b.hidden = !S.unread[k];
+    }
+  }
+  function renderSheet() {
+    $("sheet-root").classList.toggle("sheet-open", !!S.sheet);
+    if (!S.sheet) return;
+    const s = SHEETS[S.sheet];
+    $("sheet-title").innerHTML = `<span aria-hidden="true">${s.ico}</span>${s.title}`;
+    let body = "";
+    if (S.sheet === "news") {
+      body = `<p class="note">Public events. All players see these.</p>${logList(news)}`;
+    } else if (S.sheet === "you") {
+      body = `<p class="note">Private events. Only you see these.</p>${logList(mine())}`;
+    } else if (S.sheet === "jury") {
+      const jurors = tanks.filter((t) => t.dead || (t.you && S.juror));
+      const counts = { ...tally };
+      if (S.vote) counts[S.vote] = (counts[S.vote] || 0) + 1;
+      const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+      body = `<section><h3>Jurors</h3><div class="jurors">${jurors.map((t) => `<span class="mini">${img(t.id)}${t.player}${t.you ? " (you)" : ""}</span>`).join("")}</div></section>
+        <p class="note">A destroyed tank joins the jury. Each night, each juror votes for one living tank. At 22:00, a tank with 3 or more votes gets 1 extra AP.</p>
+        ${S.juror ? `<section><h3>Tonight's votes · jurors only</h3><div class="well tally">${rows.map(([id, n]) => `<div>${img(id)}<span class="who">${tanks.find((t) => t.id === id).player}</span>${n >= 3 ? `<i class="gain">+1 AP</i>` : ""}<b class="vc">${n} ${n === 1 ? "vote" : "votes"}</b></div>`).join("")}</div></section>`
+                  : `<p class="note">Only jurors see the votes.</p>`}`;
+    } else if (S.sheet === "settings") {
+      const dark = root.dataset.mode === "dark";
+      body = `<section><h3>Theme</h3><div class="btn-row">
+          <button type="button" class="btn small ${dark ? "c-back" : "c-ink"}" data-theme-set="light" aria-pressed="${!dark}"><span class="lbl">☀️ Light</span></button>
+          <button type="button" class="btn small ${dark ? "c-ink" : "c-back"} tilt-r" data-theme-set="dark" aria-pressed="${dark}"><span class="lbl">🌙 Dark</span></button>
+        </div></section>
+        <section><h3>Draft only</h3><div class="btn-row"><button type="button" class="btn small c-back" data-view><span class="lbl">${S.juror ? "❤️ Back to the living view" : "☠️ Preview the destroyed view"}</span></button></div></section>`;
+    }
+    $("sheet-body").innerHTML = body;
+  }
+  function openSheet(k) {
+    clearAim();
+    S.sheet = S.sheet === k ? null : k;
+    if (S.sheet && S.unread[S.sheet]) S.unread[S.sheet] = 0;
+    render();
+    if (S.sheet) $("sheet").querySelector("[data-close]").focus({ preventScroll: true });
+  }
+  function closeSheet() {
+    if (!S.sheet) return;
+    if (S.sheet === "news") news.forEach((e) => (e.new = false));
+    if (S.sheet === "you") mine().forEach((e) => (e.new = false));
+    S.sheet = null; render();
+  }
+
+  function render() { renderHud(); renderBoard(); renderTray(); renderTabs(); renderSheet(); tick(); }
+
+  // ---------- aiming (board shortcuts and the Move panel) ----------
+  function aimDir(dx, dy) {
+    if (S.juror) return;
+    const x = me.x + dx, y = me.y + dy;
+    if (!inBoard(x, y)) { fx("tag", me.x, me.y, "Edge of the board", ""); return; }
+    const t = at(x, y);
+    if (t) { fx("tag", x, y, `${t.player} is in the way`, ""); return; }
+    S.panel = "move"; S.pick = null; S.sel = null; S.sheet = null;
+    S.move = { x, y };
+    render();
+  }
+  function selectTank(t) {
+    if (!t) return;
+    if (!S.juror && t.you) { if (S.panel) { clearAim(); render(); } else openMenu(); return; }
+    S.panel = "target"; S.move = null; S.sheet = null;
+    if (S.pick && !inReach().some((r) => r.id === t.id)) S.pick = null;
+    S.sel = t.id;
+    render();
+  }
+
+  // board shortcuts: tap a tank (generous radius) to target it; tap or swipe anywhere else to aim a move; tap your own tank for all actions
+  let down = null;
+  const board = $("board");
+  board.addEventListener("pointerdown", (e) => { down = { x: e.clientX, y: e.clientY }; try { board.setPointerCapture(e.pointerId); } catch (_) {} });
+  board.addEventListener("pointercancel", () => { down = null; });
+  board.addEventListener("pointerup", (e) => {
+    if (!down) return;
+    const dx = e.clientX - down.x, dy = e.clientY - down.y;
+    down = null;
+    if (Math.hypot(dx, dy) > 22) {
+      if (S.juror) return;
+      if (Math.abs(dx) > Math.abs(dy)) aimDir(Math.sign(dx), 0); else aimDir(0, Math.sign(dy));
+      return;
+    }
+    const r = board.getBoundingClientRect(), cell = board.clientWidth / N;
+    const px = (e.clientX - r.left - board.clientLeft) / cell, py = (e.clientY - r.top - board.clientTop) / cell;
+    let best = null, bd = 0.9;
+    for (const t of living()) {
+      const d = Math.hypot(px - (t.x + 0.5), py - (t.y + 0.5));
+      if (d < bd) { bd = d; best = t; }
+    }
+    if (best) return selectTank(best);
+    if (S.juror) { if (trayOpen()) { clearAim(); render(); } return; }
+    const gx = Math.floor(px) - me.x, gy = Math.floor(py) - me.y;
+    if (!gx && !gy) return;
+    if (Math.abs(gx) === Math.abs(gy)) { fx("tag", Math.floor(px), Math.floor(py), "Moves go up, down, left or right", ""); return; }
+    if (Math.abs(gx) > Math.abs(gy)) aimDir(Math.sign(gx), 0); else aimDir(0, Math.sign(gy));
+  });
+
+  // a tap outside the action panel closes it (the board has its own rules above)
+  document.addEventListener("pointerdown", (e) => {
+    if (!trayOpen() || T) return;
+    if (e.target.closest("#tray, #board, #sheet-root, #tour")) return;
+    clearAim(); render();
+  });
+
+  // ---------- action animations ----------
+  const cpct = (v) => (v + 0.5) * 5;
+  const pieceEl = (id) => $("pieces").querySelector(`[data-id="${id}"]`);
+  let busy = false;   // true while a shot is in the air
+  function addFx(cls, x, y, color) {
+    const d = document.createElement("div");
+    d.className = cls;
+    d.style.left = cpct(x) + "%"; d.style.top = cpct(y) + "%";
+    if (color) d.style.setProperty("--c", color);
+    $("fx").appendChild(d);
+    return d;
+  }
+  // Shoot and Give AP: the tank kicks back, a muzzle flash, then a tracer flies straight and fast to the target. Same motion, different color.
+  function shot(from, to, color, done) {
+    if (still.matches) return done();
+    const dx = to.x - from.x, dy = to.y - from.y, dist = Math.hypot(dx, dy), ux = dx / dist, uy = dy / dist;
+    const gun = pieceEl(from.id);
+    if (gun) gun.animate([{ transform: "none" }, { transform: `translate(${-ux * 22}%, ${-uy * 22}%)`, offset: .25 }, { transform: "none" }], { duration: 260, easing: "ease-out" });
+    const flash = addFx("fx-muzzle", from.x + ux * 0.6, from.y + uy * 0.6, color);
+    setTimeout(() => flash.remove(), 260);
+    const d = addFx("fx-tracer", from.x + ux * 0.5, from.y + uy * 0.5, color);
+    d.style.transformOrigin = "0 0";
+    d.style.transform = `rotate(${Math.atan2(dy, dx)}rad) translate(-100%, -50%)`;   // the bright head sits on the point, the tail trails behind
+    d.animate([{ left: d.style.left, top: d.style.top }, { left: cpct(to.x) + "%", top: cpct(to.y) + "%" }],
+      { duration: 70 + dist * 18, easing: "linear" }).onfinish = () => { d.remove(); done(); };
+  }
+  function burst(x, y, color, big) {
+    if (still.matches) return;
+    const d = addFx("fx-burst" + (big ? " big" : ""), x, y, color);
+    setTimeout(() => d.remove(), 800);
+  }
+  function bump(id) {
+    const el = pieceEl(id);
+    if (el && !still.matches) el.animate([{ transform: "scale(1)" }, { transform: "scale(1.35)" }, { transform: "scale(1)" }], { duration: 380, easing: "cubic-bezier(.34, 1.56, .64, 1)" });
+  }
+  // a hit: the target shakes side to side
+  function rattle(id) {
+    const el = pieceEl(id);
+    if (el && !still.matches) el.animate([{ translate: "0 0" }, { translate: "-16% 0" }, { translate: "13% 0" }, { translate: "-8% 0" }, { translate: "4% 0" }, { translate: "0 0" }], { duration: 380, easing: "ease-out" });
+  }
+  // Move: your tank slides from the old square to the new one.
+  function slide(id, x0, y0, x1, y1) {
+    const el = pieceEl(id);
+    if (el && !still.matches) el.animate([{ transform: `translate(${(x0 - x1) * 100}%, ${(y0 - y1) * 100}%)` }, { transform: "none" }], { duration: 260, easing: "cubic-bezier(.2, .9, .3, 1.15)" });
+  }
+  // Extend: a square pulse grows out from your tank to the edge of the new range.
+  function pulse(x, y, R, color) {
+    if (still.matches) return;
+    const d = addFx("fx-pulse", x, y, color);
+    d.animate([{ width: "5%", opacity: 1 }, { width: (2 * R + 1) * 5 + "%", opacity: 0 }], { duration: 700, easing: "cubic-bezier(.2, .8, .3, 1)" }).onfinish = () => d.remove();
+  }
+  // Destroyed: the flag spins away and debris flies out.
+  function vanish(t) {
+    if (still.matches) return;
+    const d = addFx("fx-vanish", t.x, t.y, "");
+    d.innerHTML = img(t.id);
+    d.animate([
+      { transform: "translate(-50%, -50%) scale(1) rotate(0deg)", opacity: 1 },
+      { transform: "translate(-50%, -50%) scale(1.35) rotate(-14deg)", opacity: 1, offset: .25 },
+      { transform: "translate(-50%, -50%) scale(0) rotate(170deg)", opacity: 0 },
+    ], { duration: 600, easing: "cubic-bezier(.5, 0, .75, 0)" }).onfinish = () => d.remove();
+  }
+  function debris(x, y, color) {
+    if (still.matches) return;
+    for (let i = 0; i < 12; i++) {
+      const d = addFx("fx-bit", x, y, i % 3 ? color : "#ffffff");
+      const a = (Math.PI * 2 * i) / 12 + Math.random() * 0.5, far = 20 + Math.random() * 26;
+      d.animate([
+        { transform: "translate(-50%, -50%) rotate(0deg)", opacity: 1 },
+        { transform: `translate(calc(-50% + ${(Math.cos(a) * far).toFixed(1)}px), calc(-50% + ${(Math.sin(a) * far).toFixed(1)}px)) rotate(${Math.round((Math.random() - 0.5) * 600)}deg)`, opacity: 0 },
+      ], { duration: 650 + Math.random() * 300, easing: "cubic-bezier(.15, .7, .3, 1)" }).onfinish = () => d.remove();
+    }
+  }
+  const vibe = () => { if (navigator.vibrate) try { navigator.vibrate(18); } catch (_) {} };
+  function squish(kind) {
+    const b = document.querySelector(`[data-hold="${kind}"]`);
+    if (b) { b.classList.remove("press"); void b.offsetWidth; b.classList.add("press"); }
+  }
+
+  // ---------- doing things ----------
+  function perform(kind) {
+    if (busy) return;
+    const sel = living().find((t) => t.id === S.sel);
+    if (kind === "move") {
+      if (S.panel !== "move" || !S.move || S.ap < 1 || !canStep(S.move.x, S.move.y)) return;
+      const x0 = me.x, y0 = me.y, from = coord(me.x, me.y);
+      me.x = S.move.x; me.y = S.move.y; S.ap -= 1; S.move = null;   // the Move panel stays open, ready for the next step
+      logNews(`United States moved ${from} → ${coord(me.x, me.y)}.`);
+      logMine(`You moved ${from} → ${coord(me.x, me.y)}.`);
+      render(); slide(me.id, x0, y0, me.x, me.y);
+      setTimeout(() => fx("ring", me.x, me.y, "", "var(--move)"), 200);
+    } else if (kind === "extend") {
+      if (S.panel !== "extend" || S.ap < 2) return;
+      S.ap -= 2; S.range += 1; S.panel = null;
+      logMine(`You extended your range to ${S.range}.`);
+      render(); pulse(me.x, me.y, S.range, "var(--extend-ink)"); fx("text", me.x, me.y, `Range ${S.range}`, "var(--extend-deep)");
+    } else if (kind === "attack" || kind === "give") {
+      if (S.panel !== "target" || !sel || S.ap < 1 || !inRange(me.x, me.y, sel.x, sel.y, S.range)) return;
+      S.ap -= 1; busy = true;
+      renderHud(); renderTray(); squish(kind); vibe();
+      const color = kind === "attack" ? "var(--attack)" : "var(--give-ink)";
+      shot(me, sel, color, () => {
+        busy = false;
+        if (kind === "give") {
+          logMine(`You gave 1 AP to ${sel.player} (${sel.name}).`);
+          render(); burst(sel.x, sel.y, color); bump(sel.id); fx("text", sel.x, sel.y, "+1 AP", "var(--give-deep)");
+          return;
+        }
+        sel.h -= 1;
+        if (sel.h <= 0) {
+          sel.dead = true;
+          if (S.sel === sel.id) { S.sel = null; S.panel = S.pick ? "pick" : null; }
+          logNews(`${sel.name} was destroyed.`);
+          logMine(`You struck the final blow on ${sel.player} (${sel.name}). They will see your name.`);
+          render(); vanish(sel); burst(sel.x, sel.y, color, true); debris(sel.x, sel.y, color); fx("text", sel.x, sel.y, "Destroyed", "var(--attack)", "big");
+        } else {
+          logMine(`You hit ${sel.player} (${sel.name}).`);
+          render(); burst(sel.x, sel.y, color); rattle(sel.id); fx("text", sel.x, sel.y, "Hit!", "var(--attack)");
+        }
+      });
+      return;
+    }
+    squish(kind); vibe();
+  }
+
+  // press-and-hold on buttons that spend AP
+  let H = null;
+  const tray = $("tray");
+  tray.addEventListener("pointerdown", (e) => {
+    const b = e.target.closest("[data-hold]");
+    if (!b || b.disabled || busy) return;
+    e.preventDefault();
+    try { b.setPointerCapture(e.pointerId); } catch (_) {}
+    b.classList.add("holding");
+    const kind = b.dataset.hold;
+    H = { b, t: setTimeout(() => { H = null; b.classList.remove("holding"); perform(kind); }, HOLD_MS) };
+  });
+  const endHold = () => {
+    if (!H) return;
+    clearTimeout(H.t);
+    const b = H.b; H = null;
+    b.classList.remove("holding");
+    b.classList.remove("shake"); void b.offsetWidth; b.classList.add("shake");
+    const box = tray.querySelector(".tray-head > div:last-child");
+    if (box) {
+      let m = box.querySelector(".meta");
+      if (!m) { m = document.createElement("div"); box.appendChild(m); }
+      m.className = "meta warn";
+      m.textContent = "Keep holding until the bar fills.";
+    }
+  };
+  tray.addEventListener("pointerup", endHold);
+  tray.addEventListener("pointercancel", endHold);
+  tray.addEventListener("contextmenu", (e) => { if (e.target.closest(".btn")) e.preventDefault(); });
+  tray.addEventListener("keydown", (e) => {
+    const b = e.target.closest("[data-hold]");
+    if (b && !b.disabled && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.stopPropagation(); perform(b.dataset.hold); }
+  });
+  tray.addEventListener("click", (e) => {
+    const q = (s) => e.target.closest(s);
+    let b;
+    if (q("[data-cancel]")) { clearAim(); render(); }
+    else if (q("[data-back]")) goBack();
+    else if ((b = q("[data-open]"))) openAction(b.dataset.open);
+    else if ((b = q("[data-dir]"))) { const [dx, dy] = b.dataset.dir.split(",").map(Number); aimDir(dx, dy); }
+    else if ((b = q("[data-target]"))) selectTank(living().find((t) => t.id === b.dataset.target));
+    else if (q("[data-vote]")) {
+      const t = living().find((x) => x.id === S.sel);
+      S.vote = S.sel; render();
+      if (t) { burst(t.x, t.y, "var(--vote)"); bump(t.id); fx("text", t.x, t.y, "+1 vote", "var(--vote)"); }
+    }
+  });
+
+  $("tabs").addEventListener("click", (e) => {
+    const t = e.target.closest("[data-tab]");
+    if (t) return t.dataset.tab === "actions" ? openMenu() : openSheet(t.dataset.tab);
+    if (e.target.closest("[data-tour]")) startTour();
+  });
+  $("scrim").addEventListener("click", closeSheet);
+  $("sheet").addEventListener("click", (e) => {
+    const q = (s) => e.target.closest(s);
+    let b;
+    if (q("[data-close]")) closeSheet();
+    else if ((b = q("[data-theme-set]"))) setMode(b.dataset.themeSet);
+    else if (q("[data-view]")) { S.juror = !S.juror; clearAim(); S.sheet = null; S.unread.you = 1; mineDead[0].new = true; render(); }
+  });
+
+  // ---------- tour ----------
+  const STEPS = [
+    { el: "#chart", title: "The board", text: "This is the battlefield. Each flag is a tank, with its player's name below it. Your tank is the United States. The dashed line shows your range: the squares you can shoot or give AP to." },
+    { el: '[data-tab="actions"]', title: "Actions",
+      text: () => S.juror ? "Your tank is destroyed, so your only action is the jury vote. Tap here, then pick a tank."
+                          : "All your actions are here: move, shoot, give AP and extend range. Each card shows its cost. To confirm an action that spends AP, press and hold its button until the bar fills." },
+    { el: "#chart", title: "Shortcuts",
+      text: () => S.juror ? "Tap a tank on the board to vote for it."
+                          : "Tap the board to skip a step. Tap or swipe toward a square to aim a move. Tap a tank to shoot it or give it AP. Tap your own tank to see all actions." },
+    { el: "#hud", title: "Your tank", text: "Your hearts, AP and range, and the time until the next AP. Each living tank gets 1 AP at 22:00 New York time.", pad: 4 },
+    { el: '[data-tab="news"]', title: "News", text: "Public events that all players see: moves, destroyed tanks and AP drops." },
+    { el: '[data-tab="you"]', title: "You", text: "Private events that only you see, such as a hit on your tank." },
+    { el: '[data-tab="jury"]', title: "Jury", text: "Destroyed tanks join the jury. Each night, a tank with 3 or more jury votes gets 1 extra AP." },
+    { el: '[data-tab="settings"]', title: "Settings", text: "Light or dark mode." },
+    { el: "[data-tour]", title: "Tour", text: "Tap here at any time to see this tour again." },
+  ];
+  let T = null;
+  function startTour() { clearAim(); S.sheet = null; render(); T = { i: 0 }; $("tour").hidden = false; renderTour(); }
+  function endTour() { T = null; $("tour").hidden = true; }
+  function renderTour() {
+    if (!T) return;
+    const st = STEPS[T.i], last = T.i === STEPS.length - 1;
+    const text = typeof st.text === "function" ? st.text() : st.text;
+    const skip = last ? "" : `<button type="button" class="btn small c-cancel" data-tour-skip><span class="lbl">✕ Skip</span></button>`;
+    const back = T.i ? `<button type="button" class="btn small c-back" data-tour-back><span class="lbl">‹ Back</span></button>` : "";
+    const next = `<button type="button" class="btn small c-move grow tilt-r" data-tour-next><span class="lbl">${last ? "Done ✓" : "Next ›"}</span></button>`;
+    const card = $("tour-card");
+    card.innerHTML = `<div class="tour-top"><h4 class="banner">${st.title}</h4><div class="tour-dots" aria-label="Step ${T.i + 1} of ${STEPS.length}">${STEPS.map((_, i) => `<i class="${i === T.i ? "on" : ""}"></i>`).join("")}</div></div>
+      <p>${text}</p><div class="row">${skip}${back}${next}</div>`;
+    placeTour();
+    card.querySelector("[data-tour-next]").focus({ preventScroll: true });
+  }
+  function placeTour() {
+    if (!T) return;
+    const st = STEPS[T.i], el = document.querySelector(st.el);
+    const r = el.getBoundingClientRect(), pad = st.pad ?? 6;
+    const spot = $("spot"), card = $("tour-card");
+    Object.assign(spot.style, { left: r.left - pad + "px", top: r.top - pad + "px", width: r.width + pad * 2 + "px", height: r.height + pad * 2 + "px" });
+    const vw = innerWidth, vh = innerHeight, cw = card.offsetWidth, ch = card.offsetHeight;
+    let top;
+    if (vh - (r.bottom + pad) >= ch + 24) top = r.bottom + pad + 12;
+    else if (r.top - pad >= ch + 24) top = r.top - pad - 12 - ch;
+    else top = Math.max(16, (vh - ch) / 2);
+    const left = Math.min(Math.max(r.left + r.width / 2 - cw / 2, 16), vw - 16 - cw);
+    Object.assign(card.style, { left: left + "px", top: top + "px" });
+  }
+  $("tour").addEventListener("click", (e) => {
+    const q = (s) => e.target.closest(s);
+    if (q("[data-tour-next]")) { if (T.i === STEPS.length - 1) endTour(); else { T.i++; renderTour(); } }
+    else if (q("[data-tour-back]")) { T.i--; renderTour(); }
+    else if (q("[data-tour-skip]")) endTour();
+  });
+  addEventListener("resize", placeTour);
+
+  // ---------- keyboard ----------
+  document.addEventListener("keydown", (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (T) {
+      if (e.key === "Escape") { e.preventDefault(); endTour(); }
+      else if (e.key === "ArrowRight") { e.preventDefault(); if (T.i < STEPS.length - 1) { T.i++; renderTour(); } }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); if (T.i > 0) { T.i--; renderTour(); } }
+      return;
+    }
+    if (e.key === "Escape") { e.preventDefault(); if (S.sheet) closeSheet(); else { clearAim(); render(); } return; }
+    if (S.sheet) return;
+    if (e.key === "a" || e.key === "A") { openMenu(); return; }
+    if (S.juror) return;
+    const dir = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[e.key];
+    if (dir) { e.preventDefault(); aimDir(...dir); return; }
+    const tag = (document.activeElement && document.activeElement.tagName) || "";
+    if (tag === "BUTTON" && (e.key === "Enter" || e.key === " ")) return;
+    if (e.key === "Enter") { if (S.panel === "move") perform("move"); else if (S.panel === "extend") perform("extend"); }
+    else if (e.key === "e" || e.key === "E") openAction("extend");
+    else if ((e.key === "f" || e.key === "F") && S.panel === "target") perform("attack");
+    else if ((e.key === "g" || e.key === "G") && S.panel === "target") perform("give");
+  });
+
+  // ---------- the table: a slow pixel-paint swirl behind the whole screen (WebGL) ----------
+  const PX = 5;   // each swirl pixel is 5 CSS px wide
+  const field = (() => {
+    const canvas = $("bg");
+    const gl = canvas.getContext("webgl", { antialias: false, alpha: false, preserveDrawingBuffer: true });
+    if (!gl) return { colors() {} };
+    const vs = `attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;
+    const fs = `precision mediump float;
+      uniform vec2 r; uniform float t; uniform float k; uniform vec3 a; uniform vec3 b; uniform vec3 c; uniform vec3 d;
+      float band(float v, float n) { float k = v * n; return (floor(k) + smoothstep(0.42, 0.58, fract(k))) / n; }
+      void main(){
+        vec2 p = (gl_FragCoord.xy - 0.5 * r) / min(r.x, r.y);
+        float L = length(p) + 0.0001;
+        float s = t * 0.045;
+        float ang = atan(p.y, p.x) + k + s * 0.5 + 1.2 / (0.5 + L);
+        vec2 q = vec2(cos(ang), sin(ang)) * L * 3.6;
+        for (int i = 0; i < 5; i++) {
+          float f = float(i);
+          q += 0.38 * vec2(sin(q.y * 1.15 + s * (1.0 + 0.27 * f) + f * 1.3), cos(q.x * 1.05 - s * (0.85 + 0.21 * f) + f * 2.1));
+        }
+        float v = band(0.5 + 0.5 * sin(q.x * 0.8 + q.y * 0.6), 5.0);
+        float w = band(0.5 + 0.5 * cos(length(q) * 0.9 - s * 1.7), 4.0);
+        vec3 col = mix(a, b, smoothstep(0.2, 0.85, v));
+        col = mix(col, c, smoothstep(0.45, 0.95, w) * 0.75);
+        col = mix(col, d, smoothstep(0.7, 1.0, v * w) * 0.6);
+        gl_FragColor = vec4(col, 1.0);
+      }`;
+    const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; };
+    const prog = gl.createProgram();
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return { colors() {} };
+    gl.useProgram(prog);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog, "p");
+    gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    const U = Object.fromEntries(["r", "t", "k", "a", "b", "c", "d"].map((n) => [n, gl.getUniformLocation(prog, n)]));
+    // a new pattern on each page load: a random spin angle and a random start time
+    gl.uniform1f(U.k, Math.random() * Math.PI * 2);
+    const hex = (h) => { h = h.trim().replace("#", ""); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255); };
+    const t0 = performance.now() - (20000 + Math.random() * 600000);
+    let last = 0;
+    const draw = (now) => { gl.uniform2f(U.r, canvas.width, canvas.height); gl.uniform1f(U.t, (now - t0) / 1000); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); };
+    function loop(now) {
+      if (now - last > 33) { draw(now); last = now; }
+      if (!still.matches) requestAnimationFrame(loop);
+    }
+    function size() {
+      canvas.width = Math.max(32, Math.round((canvas.clientWidth || 360) / PX));
+      canvas.height = Math.max(32, Math.round((canvas.clientHeight || 640) / PX));
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      draw(performance.now());
+    }
+    new ResizeObserver(size).observe(canvas);
+    still.addEventListener("change", () => { if (!still.matches) requestAnimationFrame(loop); });
+    requestAnimationFrame(loop);
+    return {
+      colors() {
+        const cs = getComputedStyle(root);
+        ["a", "b", "c", "d"].forEach((k) => gl.uniform3fv(U[k], hex(cs.getPropertyValue("--sw-" + k))));
+        draw(performance.now());
+      },
+    };
+  })();
+  function setMode(m) {
+    root.dataset.mode = m;
+    try { localStorage.setItem("alliance-mode", m); } catch (_) {}
+    field.colors();
+    renderSheet();
+  }
+
+  // ---------- labels, edges, clock, start ----------
+  $("cols").innerHTML = [...COLS].map((c) => `<span>${c}</span>`).join("");
+  $("rows").innerHTML = Array.from({ length: N }, (_, i) => `<span>${i + 1}</span>`).join("");
+  $("me-flag").src = FLAG_SRC.us;
+
+  // the HUD, the tab bar and the action panel share the board's left edge and width
+  const app = $("app");
+  function align() {
+    const a = app.getBoundingClientRect(), b = board.getBoundingClientRect();
+    app.style.setProperty("--gx", (b.left - a.left).toFixed(1) + "px");
+    app.style.setProperty("--gw", b.width.toFixed(1) + "px");
+  }
+  const ro = new ResizeObserver(() => { align(); renderShapes(); placeTour(); });
+  ro.observe(board); ro.observe(app);
+
+  function tick() {
+    const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" })
+      .formatToParts(new Date()).map((x) => [x.type, x.value]));
+    let left = 22 * 3600 - (+p.hour * 3600 + +p.minute * 60 + +p.second);
+    if (left <= 0) left += 86400;
+    const pad = (n) => String(n).padStart(2, "0");
+    const txt = `${pad(Math.floor(left / 3600))}:${pad(Math.floor((left % 3600) / 60))}:${pad(left % 60)}`;
+    document.querySelectorAll(".cd").forEach((el) => (el.textContent = txt));
+  }
+  setInterval(tick, 1000);
+
+  let saved = "light";
+  try { saved = localStorage.getItem("alliance-mode") || "light"; } catch (_) {}
+  root.dataset.mode = saved === "dark" ? "dark" : "light";
+  field.colors();
+  render();
+  align();
+})();
+</script>

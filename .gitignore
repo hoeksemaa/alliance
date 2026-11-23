@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# local database (PGlite) and secrets
+.data/
+.env
+.env*.local
+
+# copied from node_modules/flag-icons by scripts/copy-flags.mjs
+public/flags/
+
+.vercel/
+.playwright-mcp/
+.DS_Store

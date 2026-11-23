@@ -1,0 +1,32 @@
+{
+  "name": "alliance",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "flags": "node scripts/copy-flags.mjs",
+    "predev": "node scripts/copy-flags.mjs",
+    "dev": "next dev",
+    "prebuild": "node scripts/copy-flags.mjs",
+    "build": "next build",
+    "start": "next start",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.6.0",
+    "flag-icons": "7.6.0",
+    "next": "16.4.6",
+    "pg": "8.23.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "@types/pg": "8.23.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "typescript": "5.9.3",
+    "vitest": "5.1.1"
+  }
+}
